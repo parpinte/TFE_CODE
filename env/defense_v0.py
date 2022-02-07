@@ -11,7 +11,6 @@ Actions:    0 -> noop
 # TODO: write suite of unittests
 # TODO: verify firing not allowed when blocked
 
-import time
 from itertools import product
 import functools
 
