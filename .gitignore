@@ -1,0 +1,4 @@
+.venv/
+nets/*
+env/__pycache__/
+figures/*.png
