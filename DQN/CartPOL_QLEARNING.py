@@ -106,7 +106,7 @@ while not done:
     action = np.argmax(q_table[discrete_state])
     discrete_state = get_discrete_state(env.reset(), bins)
     env.render()
-    # time.sleep(0.1)
+    time.sleep(0.1)
     
     
     
