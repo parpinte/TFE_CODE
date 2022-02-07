@@ -1,3 +1,5 @@
+import time
+
 import numpy as np
 import defense_v0
 
@@ -57,6 +59,7 @@ def test04():
         env.step(action)
         env.render()
         print(env.state())
+        time.sleep(10)
 
 def test05():
     "test max number of steps"
