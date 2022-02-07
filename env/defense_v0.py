@@ -458,12 +458,12 @@ def write_terrain(name, terrain):
     """
     size = terrain['size']
     s = render_terrain(terrain)
-    with open(f'env/terrains/{name}_{size}x{size}.ter', 'w') as f:
+    with open(f'terrains/{name}_{size}x{size}.ter', 'w') as f:
         f.write(s)
 
 def load_terrain(name):
     terrain = {'obstacles': [], 'blue': [], 'red': []}
-    path = 'env/terrains/'
+    path = 'terrains/'
     with open(path + name + '.ter', 'r') as f:
     #with open('terrains/' + name + '.ter', 'r') as f:
         for idx, line in enumerate(f.readlines()):

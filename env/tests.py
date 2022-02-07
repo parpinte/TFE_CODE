@@ -59,7 +59,7 @@ def test04():
         env.step(action)
         env.render()
         print(env.state())
-        time.sleep(10)
+        time.sleep(0.01)
 
 def test05():
     "test max number of steps"
