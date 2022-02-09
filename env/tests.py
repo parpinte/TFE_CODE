@@ -113,8 +113,12 @@ def test07():
     from pettingzoo.test import api_test
     env = defense_v0.env()
     api_test(env, num_cycles=10, verbose_progress=True)
+    
+    
+    
+    
 
 
 
 if __name__ == '__main__':
-    test04()
+    test05()

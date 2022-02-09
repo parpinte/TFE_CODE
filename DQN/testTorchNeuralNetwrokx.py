@@ -55,5 +55,5 @@ def test_DQN():
     x = torch.tensor(env.reset(), device= device)
     print(x)
     print(agent(x))
-
+    print(torch.argmax(agent(x)))
 test_DQN()
