@@ -30,18 +30,15 @@ output_nodes = 2
 print(f"output_nodes = {output_nodes}")
 
 class DQN(nn.Module):
-    def __init__(self, *kargs):
+    def __init__(self, input_nodes, hidden_nodes, output_nodes):
         super(DQN, self).__init__()
-        self.input_nodes = 4
-        self.hidden_nodes_1 = 64
-        self.hidden_nodes_2 = 32
-        self.output_nodes = 2
+        self.input_nodes = input_nodes
+        self.hidden_nodes = hidden_nodes
+        self.output_nodes = output_nodes
         self.linear = nn.Sequential(
-            nn.Linear(self.input_nodes, self.hidden_nodes_1),
+            nn.Linear(self.input_nodes, self.hidden_nodes),
             nn.ReLU(),
-            nn.Linear(self.hidden_nodes_1, self.hidden_nodes_2),
-            nn.ReLU(),
-            nn.Linear(self.hidden_nodes_2, self.output_nodes),
+            nn.Linear(self.hidden_nodes, self.output_nodes),
         )
 
     def forward(self, x):

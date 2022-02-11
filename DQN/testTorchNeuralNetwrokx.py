@@ -61,7 +61,7 @@ def main():
     stateTensor = torch.tensor(state, device= device)
     is_done = False
     batch = []
-    criterian = nn.CrossEntropyLoss()
+    criterian = nn.CrossEntropyLoss()  # MSE  
     optimizer = optim.Adam(agent.parameters(), lr = gamma)
     while is_done == False:
         # get the q values by applying the the agent 
@@ -69,6 +69,7 @@ def main():
         # store the different q values in vector 
         Qvals_queue = Qvals.cpu().detach().numpy() # cpu() to copy in memory / detach() leave the grad / numpy() convert to array  
         # evaluate an Eps greedy 
+        # with torch.no_grad() % signaler que je suis pas entrain de faire du back prop 
         if random.random() > eps:
             action = np.argmax(Qvals_queue)
             # print(f" no eps = {action}")
@@ -82,6 +83,7 @@ def main():
         information = (state, action, reward, New_state)
         batch.append(information)
         state = New_state
+        # variable en micuscule 
     print(f"length of the batch = {len(batch)}")
 
     # Now that the batch is created we need to train our neural network with it 
@@ -97,32 +99,37 @@ def main():
     QValues = agent(StatesTensor)
     #  print(QValues)  # it works ==> :) 
     # Store the QValues in a vector (array)
-    Q_array = QValues.cpu().detach().numpy()
+    #Q_array = QValues.cpu()
     # now we need to find which Q was used ( which can be found by looking to the actions taken)
     Actions_taken = [batch[i][1] for i in range(len(batch))]
     print(Actions_taken)
+    """
     Qtaken_list = []
     for i, act in enumerate(Actions_taken):
         Qtaken_list.append(Q_array[i,act])
     Q_token = torch.tensor(np.array(Qtaken_list), device=device) 
-    Q_token = Q_token[None, :]
+    """
+    Q_token = QValues[range(len(batch)), Actions_taken] # select only Q-vals for actions taken
+    # Q_token = Q_token[None, :]
     # print(Q_token)
     # create the ground truth formula ( Reward + gamma * max(NN(i)))
     # the rewards are given ( see the batch )
     # NN(S_) is the one we need to find by applying the NN on S_ (in batch )
     # compute max(NN(S_)) 
     States_Tensor = torch.tensor([batch[i][3] for i in range(len(batch))], device = device)
-    get_max_QS_ = np.max(agent(States_Tensor).cpu().detach().numpy(),axis = 1)
-    Rewards = np.array([batch[i][2] for i in range(len(batch))])
-    target = torch.tensor(Rewards  + gamma * get_max_QS_, device=device) # the goal to reach 
+    get_max_QS_ = torch.max(agent(States_Tensor), axis=1)[0]
+    Rewards = torch.tensor([batch[i][2] for i in range(len(batch))], device=device)
+    target = Rewards  + gamma * get_max_QS_ # the goal to reach 
     # now we need to compute the lost 
     print(Q_token.shape)
     print(target.shape)
-    loss = criterian(Q_token,target)
+    #loss = criterian(Q_token,target)
+    loss = torch.mean((target - Q_token)**2)
+
+    optimizer.zero_grad()
+    loss.backward()
+    optimizer.step()
     
-
-
-
 
 
 
