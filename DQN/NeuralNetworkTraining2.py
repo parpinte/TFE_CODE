@@ -86,6 +86,8 @@ for epoch in range(num_epochs):   # for each epoch
         scores = model(data)
         # comoute the loss 
         loss = criterian(scores, target) # as input the prediction of the neural network and the correct answer ( ground truth )
+        print(scores.shape)
+        print( target.shape)
         # for ach batch we want to set the gradients to 0 so he donesn't store the previous back prop for the previous forward prop 
         optimizer.zero_grad()
         loss.backward()
