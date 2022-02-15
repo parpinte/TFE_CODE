@@ -3,3 +3,4 @@ matplotlib==3.5.1
 gym==0.21.0
 pettingzoo
 torch==1.10.2
+tensorboard

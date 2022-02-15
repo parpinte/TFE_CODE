@@ -1,4 +1,6 @@
-""" Independent Q-learning for DEFENSE (with action mask) """
+""" Independent Q-learning for DEFENSE (with action mask)
+This implementation does NOT use weight sharing (same network for agents)
+"""
 
 import random
 import copy
@@ -11,8 +13,12 @@ import torch
 from torch import nn
 from torch import optim
 from torch.nn import functional as F
+device = "cuda" if torch.cuda.is_available() else "cpu" # TODO: activate device usage everywhere
+device = "cpu" # deactivates cuda
 
-from utilities import Logger, build_network
+from torch.utils.tensorboard import SummaryWriter
+
+from utilities import build_network, EpisodeStep
 
 # hack to allow import of env
 import sys; sys.path.insert(0, '.')
@@ -25,23 +31,6 @@ optimizer = optim.Adam
 
 DEFAULT_OBS = np.zeros(8)
 
-# %%
-class EpisodeStep:
-    def __init__(self, observation, mask, action, reward, done, next_obs, next_mask):
-        self.observation = observation
-        self.mask = mask
-        self.action = action
-        self.reward = reward
-        self.done = done
-        self.next_obs = next_obs
-        self.next_mask = next_mask
-        self.counter = 0
-    
-    def __iter__(self):
-        all = [self.observation, self.mask, self.action, self.reward, self.done, self.next_obs, self.next_mask]
-        return iter(all)
-
-# %%
 class Runner:
     """
     Implementation of a simple DQN algorithm.
@@ -71,10 +60,8 @@ class Runner:
         # select which agents learn and wich don't (= all others)
         if kwargs['learners'] == 'all':
             self.learners = self.env.agents[:] # ['blue_0'] #   ['blue_0'] #  ['adversary_0'] #
-        elif  kwargs['learners'] == 'blue':
-            self.learners = ['blue_0']
-        elif kwargs['learners'] == 'red':
-            self.learners = ['red_0']
+        else:
+            self.learners = [agent for agent in self.env.agents if agent.startswith(kwargs['learners'])]
         self.others   = [agent for agent in self.env.agents if agent not in self.learners]
         for agent in self.env.agents:
             if agent in self.learners:
@@ -100,10 +87,10 @@ class Runner:
         self.sync_rate = kwargs.get('sync_rate', SYNC_RATE)
         self.n_evals = kwargs.get('n_evals', 20)
         self.verbose = kwargs.get('verbose', True)
-        self.logger = Logger(self.learners, 'step', 'loss', 'reward', 'epsilon', name='dqn')
         self.kwargs = kwargs # store all arguments for printing in __str__
 
         self.rand_idx = random.randint(0, 100000)
+        self.writers = {agent: SummaryWriter(log_dir=f"runs/dqn_{str(self.rand_idx)}_{str(agent)}") for agent in self.learners}
     
     def __str__(self):
         kwargs = self.kwargs
@@ -121,10 +108,11 @@ class Runner:
         s += f"optimizer = {optimizer.__module__.split('.')[-1]}\n"
         s += f"learners = {self.learners}\n"
         s += f'others = {self.others}\n'
-        s += f"identifier = {self.rand_idx}  \n"
+        
         s += f"max range = {self.max_distance} \n"
         s += f"learners = {self.learners}"
-        s += f"\nfinal reward = {self.eval(self.n_evals)[0]['blue_0']:4.3f}"
+        s += f"\nfinal reward = {self.eval(self.n_evals)[0]['blue_0']:4.3f}\n"
+        s += f"identifier = {self.rand_idx}  \n"
         return s
 
     def run(self, n_iters=10):
@@ -136,35 +124,43 @@ class Runner:
             if min([len(self.buffers[agent]) for agent in self.learners]) < self.sample_size:
                 continue
             losses = {agent: [] for agent in self.learners}
+            # learning takes place in this loop
             for _ in range(self.n_batches):
                 for agent in self.learners:
                     batch = random.sample(self.buffers[agent], k=self.sample_size)
                     loss = self.agents[agent].update(batch)
                     losses[agent].append(loss)
             if indx % LOG_INTERVAL == 0:
-                avg_rwd, std_rwd = self.eval(self.n_evals)
-                for agent in self.learners:
-                    avg_loss, std_loss = np.mean(losses[agent]), np.std(losses[agent])
-                    if self.verbose:
-                        print(f"{indx}/{n_iters} - {agent:11s}: loss = {avg_loss:5.4f}, avg reward = {avg_rwd[agent]:5.4f}")
-                    self.logger.log(agent, indx, (avg_loss, std_loss), (avg_rwd[agent], std_rwd[agent]), self.epsilon)   
+                self.log(indx, losses)
 
             if indx > 0 and indx % self.sync_rate == 0:
                 for agent in self.learners:
                     self.agents[agent].sync()
     
+    def log(self, indx, losses):
+        avg_rwd, std_rwd, avg_length = self.eval(self.n_evals)
+        for agent in self.learners:
+            avg_loss, std_loss = np.mean(losses[agent]), np.std(losses[agent])
+            if self.verbose:
+                print(f"{indx} - {agent:11s}: loss = {avg_loss:5.4f}, avg reward = {avg_rwd[agent]:5.4f}")
+            self.writers[agent].add_scalar('avg_loss', avg_loss, indx)
+            self.writers[agent].add_scalar('avg_reward', avg_rwd[agent], indx)
+            self.writers[agent].add_scalar('avg_length', avg_length, indx)
+
     def eval(self, n):
         rewards = {agent: [] for agent in self.agents}
+        lengths = []
         for _ in range(n):
             episode = self.generate_episode(train=False)
             for agent in episode:
                 rewards[agent].append(np.sum([step.reward for step in episode[agent][:-1]]))
+            lengths.append(len(episode['blue_0']))
         means, stds = {}, {}
         for agent in self.agents:
             means[agent] = np.mean(rewards[agent]) # TODO: better solution (eg. divide by initial reward)
             stds[agent]  = np.std(rewards[agent]) 
 
-        return means, stds
+        return means, stds, np.mean(lengths)
     
     def generate_episode(self, train=True, render=False):
         self.env.reset()
@@ -181,9 +177,13 @@ class Runner:
                 episode[agent][-1].next_mask = observation['action_mask']
                 episode[agent][-1].reward = reward
                 episode[agent][-1].done = done
-            action = None if done else self.agents[agent].get_action(observation,
-                                                                     epsilon=self.epsilon if train else 0.0)
-            self.env.step(action if not done else None)
+            
+            if done:
+                action = None
+            else:
+                action = self.agents[agent].get_action(observation, epsilon=self.epsilon if train else 0.0)
+            
+            self.env.step(action)
             episode[agent].append(EpisodeStep(observation['obs'], observation['action_mask'], action,
                                               None, None, None, None))
             if train:
@@ -303,7 +303,6 @@ def train(args):
     print(runner)
     runner.run(n_iters=int(args.n_iters))
   
-    runner.logger.plot(runner.rand_idx, window=1, text=runner.__str__())
     for agent in runner.learners:
         runner.agents[agent].save(runner.rand_idx)
     print(f'--- Saved with id {runner.rand_idx} ---')
@@ -338,7 +337,7 @@ class Args:
         lr = 0.01
         gamma = 0.99
         sync_rate = 50
-        n_iters = 500
+        n_iters = 5000
         buffer_size = 1024
         n_batches = 64
         sample_size = 128
@@ -347,7 +346,7 @@ class Args:
         use_mixer = False
         n_agents = 1
         range=4
-        learners='blue'
+        learners='blue' # 'all', 'blue' or red'
 
 if __name__ == '__main__':
     args = Args()

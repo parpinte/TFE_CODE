@@ -31,22 +31,26 @@ where the `env.agent_iter()` method iterates over all alive agents. The current 
 ![redered board](img/board_example.png)
 
 
-### Gema description
+### Game description
 Every agent receives an observation that consists of:
 1. An array that represents the true observation and that contains:
     1. the own state: position (x, y), alive status (0 or 1), remaining ammo and who he's aiming at (-1 if None)
+    1. state information of the other agents on the same team
+    1. state information of the agents on the other team
     1. the position (x, y) of the (unmovable) landmarks in the terrain
-    1. state information of other agents
 1. A boolean arry for the allowed actions in the current state. Only allwoed actions can be taken - otherwise, the environment throws an exception. Actions can be disallowed because:
     1. Attempting to move of the board or to already occupied position (by other agent or landmark)
     1. Firing when not aiming or no ammo left, or if there is no direct line of sight. Other agents or landmarks can block the line of sight; they can thus be used to hide behind.
     1. Any action when not alive
 
-Every agent has 5 + $N_{r|b}$ at his disposal: `noop` (0), `left` (1), `right` (2), `up` (3),`down` (4),  `fire` (5), `aim0` (6 - aim at first opposing agent), ...
+The size of the action space depends on the number of opponents. Every agent has 5 fixed actions at his disposal: `noop` (0), `left` (1), `right` (2), `up` (3),`down` (4) and  `fire` (5). Depending on the number of opponents, he can take $N_{r|b}$ additional aim actions: `aim0` (6 - aim at first opposing agent), `aim1`,  .... Actions are passed be using the action number as argument for `env.step()`.  
 
 Rewards are given when:
 1. a step is made: $R=-0.1$. This induces the agents to end the episode
 1. when all opponents are destroyed: $R=1$ (or $R=-1$ for the losing team)
+
+REMARK: the structure of the game is such that only live agents can still receive a reward at the end of the game. A dead agent thus never receives a reward, even if she has contributed to a potential win. For a correct analysis,
+rewards should thus be evaluated on the team level.
 
 ## Algorithms
 The `algorithms` folder contains a number of deep reinforcement learning algorithms (based on `PyTorch`):
