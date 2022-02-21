@@ -126,7 +126,7 @@ capacity = 1000
 replay_memory =  Buffer(capacity = capacity)
 eps = 0.1
 state = env.state().ravel()
-gamma = 0.1
+gamma = 0.01
 agents_net  = {}
 for agent in env.agents:
     agents_net[agent] = DQN(input_nodes = 18, hidden_nodes = 64, output_nodes = 5).to(device)
@@ -164,7 +164,7 @@ for episode in range(NB_EPISODES):
 
     eps = 0.1
     state = env.state().ravel()
-    gamma = 0.1
+    gamma = 0.01
     for step in range(max_cycles -1):
         # get the state of each agent in order to pass them through the network
         agents_states = torch.tensor(state.reshape(env.num_agents, -1), device=device)
