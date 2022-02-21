@@ -51,12 +51,13 @@ def distance(agent, other):
     x2, y2 = other.x, other.y
     return np.sqrt((x2-x1)**2  + (y2-y1)**2)
 
+# class for the state for the whole system 
 class State:
     def __init__(self, agents, obstacles) -> None:
         self.agents = agents
         self.obstacles = obstacles
     
-    @property
+    @property # def function without metting the parenthesis in it 
     def occupied(self):
         "returns list of occupied squares"
         squares = self.obstacles[:]

@@ -1,8 +1,8 @@
-from pettingzoo.butterfly import pistonball_v6
+from pettingzoo.magent import battlefield_v3
 import time
 import random
 import numpy as np 
-env = pistonball_v6.env()
+env = battlefield_v3.env()
 env.reset()
 while True:
     for agent in env.agent_iter():

@@ -197,7 +197,7 @@ class QMixRunner(Runner):
                     states = states[:, 0, :]    # => fully cooperative setting, all agents share a common reward function
                     next_states = next_states[:, 0, :]                                          
                     qs = self.mixer(qs.T, states) # = Qtot
-                    next_qs = self.target_mixer(next_qs.T, next_states)                                            
+                    next_qs = self.target_mixer(next_qs.T, next_states).detach()                                    
                     
                 q_target = rewards + self.gamma * (1 - dones) * next_qs
                 loss = F.mse_loss(qs, q_target)
@@ -332,7 +332,7 @@ def demo():
     parser.add_argument("--lr", default=0.001)
     parser.add_argument("--gamma", default=0.9)
     parser.add_argument("--sync_rate", default=100)
-    parser.add_argument("--n_iters", default=5000)
+    parser.add_argument("--n_iters", default=1000)
     parser.add_argument("--buffer_size", default=2048)
     parser.add_argument("--n_batches", default=64)
     parser.add_argument("--sample_size", default=128)
