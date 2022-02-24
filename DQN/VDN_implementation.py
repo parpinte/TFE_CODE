@@ -30,6 +30,8 @@ class DQN(nn.Module):
         self.linear = nn.Sequential(
             nn.Linear(self.input_nodes, self.hidden_nodes),
             nn.ReLU(),
+            nn.Linear(self.hidden_nodes, self.hidden_nodes),
+            nn.ReLU(),
             nn.Linear(self.hidden_nodes, self.output_nodes),
         )
 
@@ -101,6 +103,7 @@ def get_target(env, agents_net, reward_sample, new_state_sample, GAMMA, device, 
     # r = torch.tensor(reward_sample , device = device)
     new_state_sample = torch.tensor(new_state_sample, device = device)
     # need 
+    # print(new_state_sample.shape)
     new_agents_states = new_state_sample.reshape(BATCH_SIZE, env.num_agents, 18)
     
     # print(new_agents_states.shape)
@@ -114,7 +117,7 @@ def get_target(env, agents_net, reward_sample, new_state_sample, GAMMA, device, 
         q_vals.append(qs)
     qvals = np.array(q_vals)
     q_max_futur = torch.max(torch.tensor(q_vals, device=device, dtype= torch.float32), dim =1)[0]
-    target =  r + GAMMA * q_max_futur
+    target =  r / env.num_agents + GAMMA * q_max_futur
     return target
 
 def demo(L = 20):
@@ -143,13 +146,13 @@ def demo(L = 20):
 
 if __name__ == '__main__':
     NB_EPISODES = 2000
-    BATCH_SIZE = 100
+    BATCH_SIZE = 10
     START_EPS = 0.99 # will decay at each time 
     PRINT_EACH  = 100 
     UPDATE_EACH = 50
     MAX_CYCLES = 101
-    BUFFER_SIZE = 1000
-    GAMMA = 0.1
+    BUFFER_SIZE = 300
+    GAMMA = 0.99
     env = simple_spread_v2.parallel_env(N= 3, max_cycles = MAX_CYCLES)
     replay_memory =  Buffer(capacity = BUFFER_SIZE)
     env.reset()
@@ -192,6 +195,7 @@ if __name__ == '__main__':
             experience = Experience(state, action_vect, reward_vect, new_state, is_done, q_chosen)
             replay_memory.add(experience)
             state = new_state
+            # print(f"Stat")
             cumul_reward +=  env.num_agents * reward['agent_0']    
 
         # lets take a sample 
@@ -221,7 +225,7 @@ if __name__ == '__main__':
 
     ep = range(NB_EPISODES)
     plt.plot(ep, Rtot)
-    plt.savefig('foo.png')
+    plt.savefig('reward.png')
     demo()
 
 
