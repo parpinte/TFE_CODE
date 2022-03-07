@@ -51,6 +51,7 @@ class QMixer(nn.Module):
         w1b1_out = F.elu(torch.bmm(q_values, w1) + b1)  # F.elu(+ b1) 
         # apply w2
         w2out = torch.bmm(w1b1_out, w2) + b2
+        out = w2out.view(-1, 1, 1)
         prt = False 
         if prt:
             print(f"w1 output {w1.shape}")
@@ -149,12 +150,39 @@ class Mixer:
             self.agents[agent] = agent()
 
 
+"""
+    env = simple_spread_v2.parallel_env(N= 3, max_cycles=100)
+    env.reset()
+    print(env.action_space(env.agents[0]).n)
+
+"""
+class randomAgent():
+    def __init__(self, actions):
+        self.actions = actions 
+
+
+    def get_action(self, observation):
+        return random.choice(range(self.actions))
+
+def concat(dict):
+    keys = dict.keys()
+    elements = [dict[key] for key in keys]
+    elements = np.concatenate(elements)
+    return elements  
 
 
 if __name__ == '__main__':
     env = simple_spread_v2.parallel_env(N= 3, max_cycles=100)
-    env.reset()
-    print(env.action_space(env.agents[0]).n)
+    obs = env.reset()
+    obs = concat(obs)
+    actions = env.action_space(env.agents[0]).n
+    ag = randomAgent(actions)
+    action = {}
+    action  = {agent : ag.get_action(obs) for agent in env.agents}
+    observation, reward, is_done, _ = env.step(action)
+    observation = concat(observation)
+    print(observation.shape) 
+    print(reward)
 
 
 
