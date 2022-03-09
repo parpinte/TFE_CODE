@@ -1,7 +1,7 @@
-# test of Q mix implementation 
+# test of simple adversary 
 
 from re import S
-from pettingzoo.mpe import simple_spread_v2
+from pettingzoo.mpe import simple_adversary_v2
 import time
 import numpy as np
 import random
@@ -180,7 +180,7 @@ class Agent:
 class Mixer:
     def __init__(self, env, device= 'cpu', mixer = 'Qmix', **kwargs):
         # need (agents , observation space , action space and state space in order to define all the nn ( agents + mixer )
-        self.agent_names = copy.copy(env.agents)
+        self.agent_names = copy.copy(env.agents[1:])
         self.n_agents = len(self.agent_names)
         self.state_shape = env.observation_space(env.agents[0]).shape[0]
         self.action_space = env.action_space(env.agents[0]).n
@@ -397,7 +397,7 @@ if __name__ == '__main__':
     print('Start Simulation')
     writer = SummaryWriter('/home/yemen/Documents/TFE/TFE WORk/tfe/Implementations')
 
-    env = simple_spread_v2.parallel_env(N= N_AGENTS, max_cycles= MAX_CYCLES)
+    env = simple_adversary_v2.parallel_env(N=2, max_cycles=25, continuous_actions=False)
     env.reset()
 
     # define the mixer 
