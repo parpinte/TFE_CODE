@@ -89,6 +89,7 @@ def test04():
         print(counter, env.state())
         #input('Press enter to continue ...')
         counter += 1
+        env.render()
 
 def test05():
     "test max number of steps"
@@ -199,4 +200,4 @@ def test09():
         print(agent, ' : \n', episode[agent], len(episode[agent]))
 
 if __name__ == '__main__':
-    test09()
+    test04()
