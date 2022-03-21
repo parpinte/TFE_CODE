@@ -132,11 +132,13 @@ class VDN():
     def __init__(self):
         pass
     def forward(self):
+        pass
 
 
 
 # Agent
-class Agent:
+
+class Agent():
     def __init__(self, name, net, **kwargs):
         self.name = name
         self.net = net
@@ -175,15 +177,6 @@ class Agent:
         self.target_net.load_state_dict(self.net.state_dict())
 
     
-
-
-
-    
-
-
-
-
-
 
 
 
