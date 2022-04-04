@@ -1,3 +1,28 @@
+# Qmix on defense-v0.py
+from re import I, S
+import time
+import numpy as np
+import random
+
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import torch.nn.functional as F
+import collections
+
+import argparse
+import copy
+import math
+import matplotlib.pyplot as plt
+from tensorboardX import SummaryWriter 
+
+import sys
+
+from ray import get
+sys.path.append('..')
+from environment import defense_v0 
+import numpy as np
+
 # test of Q mix implementation on defense-v0 without communication 
 
 from re import S
@@ -73,6 +98,7 @@ class Buffer():
     def __init__(self, capacity):
         self.buffer = collections.deque(maxlen = capacity)
         
+        
     # get buffer siz 
     def __len__(self):
         return len(self.buffer)
@@ -90,9 +116,10 @@ class Buffer():
         # generate batch size indexes to get miltiple experiences 
         indices = np.random.choice(len(self.buffer), batch_size, replace=False) 
         # get the different varianbles 
-        state, action, reward,  new_state, is_done = zip(*[self.buffer[idx] for idx in indices])
+        state, actions_mask, action, reward,  new_state, is_done = zip(*[self.buffer[idx] for idx in indices])
         return (
             np.array(state),
+            np.array(actions_mask),
             np.array(action),
             np.array(reward),
             np.array(new_state),
@@ -123,10 +150,7 @@ class DQN(nn.Module):
     def forward(self, x):
         output = self.linear(x)
         return output
-"""
-une fois on a enregistré la derniere episode 
 
-"""
 
 class VDN():
     def __init__(self):
@@ -145,11 +169,11 @@ class Agent():
         self.target_net = copy.deepcopy(self.net)
         self.target_net.eval()
         self.epsilon_start  = kwargs.get('epsilon',0.99)
-        _, self.id = self.name.split('agent_')
         self.device = kwargs.get('device','cuda')
-        self.epsilon = self.epsilon_start
+        self.epsilon = 1
         
-
+    def reset_epsilon(self):
+        self.epsilon = 1
     def set_epsilon(self, N_episodes, episode, parameters):
         A = parameters.A
         B = parameters.B
@@ -160,36 +184,42 @@ class Agent():
 
         self.epsilon = epsilon
 
-    def get_action(self, env, state):
-        # here wehole have the hole state ==> so we just need the state of the corresponding agent 
-        # so we need to reshape the state before getting the one wich interest us 
-        if random.random() < self.epsilon:
-            action = random.choice(range(env.action_space(env.agents[0]).n))
+    def sync(self):
+        self.target_net.load_state_dict(self.net.state_dict())
+
+
+
+    def get_action(self, state, done):
+        s = state['obs']
+        mask = state['action_mask']
+        mask_tensor = torch.tensor(state['action_mask'], device = self.device, dtype = torch.bool)
+        epsilon = self.epsilon
+        if random.random() < epsilon:
+            action = random_action(mask, done)
         else: 
             with torch.no_grad():
-                state_tensor = torch.tensor(state, device = self.device)
-                action = self.net(state_tensor).cpu().squeeze().argmax().numpy()
+
+                state_tensor = torch.tensor(s, device = self.device, dtype = torch.float32)
+                # state_tensor[not mask_tensor] = -1000
+                q = self.net(state_tensor)
+                q[~mask_tensor] = 0
+                action = q.cpu().squeeze().argmax().numpy()
+                
+
 
         return action
 
 
-    def sync(self):
-        self.target_net.load_state_dict(self.net.state_dict())
-
-    
-
-
-
 #  The Mixer 
-class Mixer:
-    def __init__(self, env, device= 'cpu', mixer = 'Qmix', **kwargs):
+class Mixer: # Mixer(env, team, device= 'cpu', mixer = 'Qmix', dropout)
+    def __init__(self, env, team, device= 'cpu', mixer = 'Qmix', **kwargs):
         # need (agents , observation space , action space and state space in order to define all the nn ( agents + mixer )
-        self.agent_names = copy.copy(env.agents)
+        self.agent_names = copy.copy(team)
         self.n_agents = len(self.agent_names)
-        self.state_shape = env.observation_space(env.agents[0]).shape[0]
-        self.action_space = env.action_space(env.agents[0]).n
+        self.state_shape = env.observation_space(self.agent_names[0])['obs'].shape[0]
+        self.action_space = env.action_space(self.agent_names[0]).n
         self.use_mixer = mixer
-        self.epsilon = kwargs.get('epsilon',0.99)
+        # self.epsilon = kwargs.get('epsilon',epsilon_params(A=0.3, B=0.1, C=0.1))
         self.device = device
         self.dropout = kwargs.get('dropout', 0.25)
         # determine the different agents networkx
@@ -197,12 +227,14 @@ class Mixer:
         self.agent_net = DQN(input_nodes = self.state_shape, hidden_nodes = 64, output_nodes = self.action_space, dropout = self.dropout).to(self.device)
         # define the different agents 
         for agent in self.agent_names:
-            self.agents[agent] = Agent(agent, self.agent_net, epsilon = self.epsilon, device = self.device, dropout = self.dropout)
+            self.agents[agent] = Agent(agent, self.agent_net, device = self.device, dropout = self.dropout)
+        
+        #print(f'state_shape = {self.state_shape} | actions = {self.action_space}')
         
         # ask which mixer we need to use 
         
         if self.use_mixer == 'Qmix':
-            self.net = QMixer(n_agents = self.n_agents, hidden_layer_dim = 64, state_shape = self.n_agents * self.state_shape, dropout = self.dropout).to(self.device)
+            self.net = QMixer(n_agents = self.n_agents, hidden_layer_dim = 32, state_shape = self.n_agents * self.state_shape, dropout = self.dropout).to(self.device)
         elif self.use_mixer == 'VDN':
             self.net = VDN()
 
@@ -235,7 +267,7 @@ class Mixer:
     def epsilon_order(self,N_episodes, episode, parameters_epsilon):
         for agent in self.agents.values():
             agent.set_epsilon(N_episodes, episode, parameters_epsilon)
-        return self.agents['agent_0'].epsilon
+        return self.agents[self.agents_name[0]].epsilon
 
 
     def get_q_values(self, batch):
@@ -248,21 +280,22 @@ class Mixer:
         #
         Q = []
         for agent in self.agent_names:
-            s = [torch.tensor(state[idx][agent], device = self.device).unsqueeze(0) for idx in range(len_s)]  # create the batch that will pass through the network  
+            s = [torch.tensor(state[idx][agent], device = self.device, dtype = torch.float32).unsqueeze(0) for idx in range(len_s)]  # create the batch that will pass through the network  
             s = torch.cat(s)
             Q.append(self.agents[agent].net(s).unsqueeze(1))
 
         q_vals = torch.cat(Q, dim = 1)
+        # print(q_vals)
         return q_vals
 
     def get_target_qvalues(self, batch):
         # the target q values will be the one to compute the target in order to compute the loss 
-        state_ = batch[3]    # (batch size, dictionnary ) 
+        state_ = batch[4]    # (batch size, dictionnary ) 
         len_s_ = state_.size
-
+        # print(f'state target = {state_}')
         Q_target = []
         for agent in self.agent_names:
-            s_ = [torch.tensor(state_[idx][agent], device = self.device).unsqueeze(0) for idx in range(len_s_)]  # create the batch that will pass through the network  
+            s_ = [torch.tensor(state_[idx][agent], device = self.device, dtype = torch.float32).unsqueeze(0) for idx in range(len_s_)]  # create the batch that will pass through the network  
             s_ = torch.cat(s_) # len_s_ * 18
             Q_target.append( self.agents[agent].target_net(s_).unsqueeze(1))
 
@@ -286,33 +319,41 @@ class Mixer:
         # curret state that need to be concatenated for the qmix_net 
         s = batch[0] 
         size_s = s.size
-        s = [torch.tensor(self.concat(s[idx]), device = self.device).unsqueeze(0) for idx in range(size_s)]
+        s = [torch.tensor(self.concat(s[idx]), device = self.device, dtype = torch.float32).unsqueeze(0) for idx in range(size_s)]
         s = torch.cat(s) # ==> give tensor (batchSize, 54 ( 3 agents ))
+        # print(f'state learn shape {s.shape}')
 
         # the state 
-        s_ = batch[3]
+        s_ = batch[4]
         size_s_ = s_.size
-        s_ = [torch.tensor(self.concat(s_[idx]), device = self.device).unsqueeze(0) for idx in range(size_s_)]
+        s_ = [torch.tensor(self.concat(s_[idx]), device = self.device, dtype= torch.float32).unsqueeze(0) for idx in range(size_s_)]
         s_ = torch.cat(s_) # ==> give tensor (batchSize, 54 ( 3 agents ))
-
+        print(f'state_ learn shape {s_.shape}')
 
         # get the qvalues 
         Qvalues = self.get_q_values(batch)
-        actions = batch[1]
-        actions = torch.cat([torch.tensor(np.array([actions[idx][agent] for agent in self.agent_names]), device = self.device).unsqueeze(0) for idx in range(actions.size)])
-        actions  = actions.unsqueeze(2)
+        # print(f'Qvalues learn funct = {Qvalues.shape}')
+        actions = batch[2]
+        # print(f'actions example = {actions[1]}')
+        actions = torch.cat([torch.tensor(np.array([actions[idx][agent] for agent in self.agent_names]), device = self.device, dtype = torch.int64).unsqueeze(0) for idx in range(actions.size)])
+        # print(f'actions before qqueeze {actions.shape}')
+        actions  = actions.unsqueeze(1)
+        # print(f'actions shape {actions.shape}')
         q_values = Qvalues.gather(2,actions).squeeze(2).unsqueeze(1) # .squeeze(2) # need  to be verified 
         # get the q tot 
+        # print(f'state shape {s.shape}')
+        # print(s)
         Qtot = self.net(s, q_values).squeeze()
+        print(f'Qtot = {Qtot}')
 
         # get the reward 
 
-        reward = batch[2]
-        reward = torch.tensor(np.array([reward[idx]['agent_0'] for idx in range(reward.size)]), dtype= torch.float32, device = self.device)
+        reward = batch[3]
+        reward = torch.tensor(np.array([reward[idx][self.agent_names[0]] for idx in range(reward.size)]), dtype= torch.float32, device = self.device)
 
         # is done needed 
-        isdone = batch[4]
-        isdone =  [isdone[idx]['agent_0'] for idx in range(isdone.size)]
+        isdone = batch[5]
+        isdone =  [isdone[idx][self.agent_names[0]] for idx in range(isdone.size)]
         isdone = torch.tensor(isdone, device = self.device)
 
         # update the Qtot 
@@ -336,130 +377,20 @@ class Mixer:
         self.optimizer.step()
 
         return loss.item()
+
+######################### LIST OF FUNCTIONS ##################
+def random_action(mask, is_done):
+    p = mask / np.sum(mask)
+    action = int(np.random.choice(range(len(p)), p = p)) if not is_done else None
+    return action
 ################ EPSILON DECAY #########################
 class epsilon_params():
     def __init__(self, A = 0.3, B = 0.1, C = 0.1):
         self.A = A
         self.B = B
         self.C = C
-#############"" GENERATE EPSIODE ################
-def generate(env, mixer, N_episodes, episode, end_rate, max_cycles, buffer):
-    # print(f"episode {episode}")
-    state = env.reset()
-    # cumulated reward 
-    cum_reward = 0.0
-    for step in range(max_cycles): 
-        eps = mixer.epsilon_order(N_episodes , episode, parameters_epsilon)
-        # actions = mixer.get_action(state)
-        actions = {}
-        for agent in mixer.agent_names:
-            actions[agent] = mixer.agents[agent].get_action(env = env, state = state[agent])
-            # print(actions)
-        observation, reward, is_done, _ = env.step(actions)
-        # create the experience 
-        experience = Experience(state, actions, reward, observation, is_done)
-        # add the experience to the buffer 
-        buffer.add(experience)
-        cum_reward += reward['agent_0']
-        state = observation
 
-    return cum_reward, eps
-
-
-def demo(n_time):
-
-    
-    for _ in range(n_time):
-        state = env.reset()
-        for step in range(MAX_CYCLES):
-            actions = {}
-            for agent in mixer.agent_names:
-                mixer.agents[agent].epsilon = 0
-                actions[agent] = mixer.agents[agent].get_action(env = env, state = state[agent])
-
-            observation, reward, is_done, _ = env.step(actions)  
-            env.render() 
-            time.sleep(0.1)
-        state = observation
-
-
-
-
-
-# define all the needed paramaters 
-
-# environment parameters 
-N_AGENTS = 2
-MAX_CYCLES = 25
-
-# replay memory parameters 
-CAPACITY = 10000
-BATCH_SIZE  = 300
-
-# MIXER PARAMETERS 
-DROPOUT = 0.25
-
-# SIMULATION PARAMETRS 
-N_EPISODES = 100000
-LEARNING_RATE = 1e-4
-GAMMA = .9
-EPSILON_START = 0.99
-UPDATE_TIME = 200 # update each 300 episodes 
-MIXER_TYPE = 'Qmix'
-DEVICE = 'cuda'
-END_RATE_EPSILON = 0.97
-# epsilon decay exponetial 
-parameters_epsilon = epsilon_params(A=0.5, B=0.1, C=0.7)
-
-# Experience 
-Experience = collections.namedtuple('Experience',['state','action','reward','new_state','is_done'])
 
 
 if __name__ == '__main__':
-    print('Start Simulation')
-    print(f'Used device [{DEVICE}]')
-    writer = SummaryWriter('/home/yemen/Documents/TFE/TFE WORk/TFE_CODE/Implementations/Qmix/runs')
-
-    env = simple_spread_v2.parallel_env(N= N_AGENTS, max_cycles= MAX_CYCLES)
-    env.reset()
-
-    # define the mixer 
-    mixer = Mixer(env, device= DEVICE, mixer = MIXER_TYPE, gamma = GAMMA, lr = LEARNING_RATE, epsilon = EPSILON_START)
-    # buffer 
-    buffer  = Buffer(capacity= CAPACITY)
-
-    for episode in range(N_EPISODES):
-        
-        R, eps = generate(env = env, mixer = mixer, N_episodes = N_EPISODES, episode = episode, end_rate = END_RATE_EPSILON, max_cycles = MAX_CYCLES , buffer = buffer)
-        # batch if we can do it 
-        while buffer.__len__() < BATCH_SIZE:
-            generate(env = env, mixer = mixer, N_episodes = N_EPISODES, episode = episode, end_rate = END_RATE_EPSILON, max_cycles = MAX_CYCLES , buffer = buffer)
-        
-        batch = buffer.sample(BATCH_SIZE)
-
-        loss = mixer.learn(batch)
-        # mixer.update_agent()
-
-        if episode % UPDATE_TIME: 
-            mixer.sync()
-           
- 
-        writer.add_scalar('reward', R, episode)
-        writer.add_scalar('loss', loss, episode)
-        writer.add_scalar('epsilon', eps, episode)
-
-        if episode % (1 * UPDATE_TIME) == 0:
-            print(f"Episode {episode} || SYNC DONE || Reward = {R} || LOSS = {loss} || EPS = {eps}")
-        
-
-
-    input_keybord = input("Do you wonna see a demo ? \n")
-    while input_keybord == "y":
-        demo(n_time = 3)
-        input_keybord = input("Do you wonna see a demo ? \n")
-
-
-        
-    
-
-
+    pass

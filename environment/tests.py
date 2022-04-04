@@ -200,4 +200,4 @@ def test09():
         print(agent, ' : \n', episode[agent], len(episode[agent]))
 
 if __name__ == '__main__':
-    test04()
+    test01()

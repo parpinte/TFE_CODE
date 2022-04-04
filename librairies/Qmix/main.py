@@ -1,4 +1,4 @@
-# test of Q mix implementation on defense-v0 without communication 
+# test of Q mix implementation 
 
 from re import S
 from pettingzoo.mpe import simple_spread_v2
@@ -461,5 +461,24 @@ if __name__ == '__main__':
 
         
     
+     
+
+
+        
+    
+
+
+    
+
+
+
+
+
+
+
+
+
+
+
 
 
