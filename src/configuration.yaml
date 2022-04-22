@@ -1,0 +1,29 @@
+# parameters  
+
+# environment 
+TERRAIN : 'central_7x7_2v2' #'central01_10x10'
+MAX_CYCLES : 200
+
+# simulation 
+N_EPISODES : 50000
+EPSILON_START : 1
+UPDATE_TIME : 200 # update each 300 episodes 
+MIXER_TYPE : 'Qmix'
+DEVICE : 'cuda'
+
+# EPSILON
+A : 0.5
+B : 0.1
+C : 0.7
+
+
+# BUFFER PARAMETRS
+CAPACITY : 300
+BATCH_SIZE : 40
+
+
+# NETWORKX
+LEARNING_RATE : 0.0001
+GAMMA : 0.9
+DROPOUT : 0.25
+

@@ -302,6 +302,7 @@ class Mixer:
         actions = torch.cat([torch.tensor(np.array([actions[idx][agent] for agent in self.agent_names]), device = self.device).unsqueeze(0) for idx in range(actions.size)])
         actions  = actions.unsqueeze(2)
         q_values = Qvalues.gather(2,actions).squeeze(2).unsqueeze(1) # .squeeze(2) # need  to be verified 
+        print(f'qvalues shape is ==> {q_values.shape}')
         # get the q tot 
         Qtot = self.net(s, q_values).squeeze()
 
