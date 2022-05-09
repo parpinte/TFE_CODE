@@ -435,7 +435,7 @@ class Runner():
         self.Experience = collections.namedtuple('Experience',['state','action','reward','new_state','is_done','action_mask'])
         self.set_mixer() 
         self.buffer = Buffer(capacity= self.CAPACITY)
-        self.Trainning_team = 'blue'
+        
 
     def teams_creation(self):
         blue_team = []

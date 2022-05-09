@@ -1,29 +1,30 @@
 # parameters  
 
 # environment 
-TERRAIN : 'central_7x7_2v2' #'central01_10x10'
-MAX_CYCLES : 200
+TERRAIN : 'central_7x7_2v2' # 'central_7x7_2v2' #'central01_10x10'
+MAX_CYCLES : 100
 
 # simulation 
-N_EPISODES : 50000
+N_EPISODES : 300000
 EPSILON_START : 1
-UPDATE_TIME : 200 # update each 300 episodes 
-MIXER_TYPE : 'Qmix'
+UPDATE_TIME : 20 # update each 300 episodes 
+PRINT_TIME : 1000
+INPUT_MESSAGES : 1
+OUTPUT_MESSAGES : 5
+HIDDEN_LAYER : 132
 DEVICE : 'cuda'
 
 # EPSILON
-A : 0.5
-B : 0.1
-C : 0.7
-
+A : 0.4
+B : 0.2
+C : 0.1
 
 # BUFFER PARAMETRS
-CAPACITY : 300
-BATCH_SIZE : 40
-
+CAPACITY_AGENT : 110
+CAPACITY : 5000
+BATCH_SIZE : 100
 
 # NETWORKX
-LEARNING_RATE : 0.0001
+LEARNING_RATE : 0.001
 GAMMA : 0.9
-DROPOUT : 0.25
-
+DROPOUT : 0
