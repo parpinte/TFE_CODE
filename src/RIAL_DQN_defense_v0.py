@@ -31,6 +31,8 @@ import matplotlib.pyplot as plt
 from tensorboardX import SummaryWriter 
 import yaml
 
+# to take screenshot
+import pyautogui as auto
 ############################# Buffer class ####################################################"" 
 class Buffer():
     # create the buffer size 
@@ -121,8 +123,8 @@ class Agent():
     def selector(self, observation, done, msg):
         s = observation['obs']
         action_mask = observation['action_mask']
-        if self.epsilon < 0.05:
-            self.epsilon = 0.05
+        if self.epsilon < 0:
+            self.epsilon = 0.01
         if random.random() < self.epsilon:
             p = action_mask / np.sum(action_mask)
             action = int(np.random.choice(range(len(p)), p = p)) if not done else 0
@@ -140,7 +142,7 @@ class Agent():
                 Qm = qma[self.n_actions:]
                 # from Qa we will choose the action and from Qm we will choose the message
                 action = Qa.cpu().squeeze().argmax().item() if not done else 0
-                message = Qm.cpu().squeeze().argmax().item() if not done else 0
+                message = Qm.cpu().squeeze().max().item() if not done else 0 # argmax
         return action, message
             
     def set_epsilon(self, N_episodes, episode):
@@ -167,7 +169,7 @@ class Agent():
             Qa[~ mask_tensor] = min(Qa).cpu().detach().item()
             Qm = qma[self.n_actions:]
             # from Qa we will choose the action and from Qm we will choose the message
-            action = Qa.cpu().squeeze().argmax().item() if not done else 0
+            action = Qa.cpu().squeeze().argmax().item() if not done else None
             message = Qm.cpu().squeeze().argmax().item() if not done else 0
         return action, message
 
@@ -246,51 +248,52 @@ class Runner():
         
         n_cycles = 0
         cum_reward = 0.0
-        for agent in self.team_to_train(training_team):
+        for agent in self.NAME_AGENTS:
             s[agent] , a[agent] ,re[agent], d[agent] ,am[agent] , m[agent] = [], [], [], [], [], []
+
 
         for agent in self.env.agent_iter():
             last_agent = self.env.agents[-1]
             # obs, r, done, _ = self.env.last()
+
             obs, r, done, _ = self.info(training_team)
-
-            # print(self.env.agents)
-
+            s[agent].append(obs['obs'])
+            am[agent].append(obs['action_mask'] )
+            re[agent].append(r)
+            d[agent].append(done)
             if training_team in agent:
-                s[agent].append(obs['obs'])
-                am[agent].append(obs['action_mask'] )
-                re[agent].append(r)
-                d[agent].append(done)
                 self.agents[agent].set_epsilon(self.N_EPISODES, episode)
                 # take the observation / the action and 
                 m[agent].append(self.msg[training_team])
                 action, message = self.agents[agent].selector(observation = obs, done = done, msg = self.msg[training_team])
-                a[agent].append(message)
-                self.msg[training_team] = message
+                a[agent].append(action)
+                self.msg[training_team] = message # message
                 cum_reward += re[agent][-1]
             else: 
-                self.agents[agent].epsilon = 1.0
+                self.agents[agent].epsilon = 1
                 self.msg[self.other_team(training_team)] = 0
-                action, message = self.agents[agent].selector(observation = obs, done = done, msg = 0) #self.msg[self.other_team(training_team)]
+                action, message = self.agents[agent].selector(observation = obs, done = done, msg = self.msg[self.other_team(training_team)])
                 message = 0 # so there is no communication done
                 # fixe the opponent 
                 # action = 0
                 # 
+                a[agent].append(action) 
+                m[agent].append(message)
 
             if agent == last_agent:
                 n_cycles +=1
-            
+            # self.env.render()
             self.env.step(action if not done else None)
             # self.env.render()
         # lsr = re['blue_0'][-1]
         # print(f'last reward {lsr}')
         # add the information to the batch 
         information_to_add = {}
-        for agent in self.team_to_train(training_team):
+        for agent in self.NAME_AGENTS:
             information_to_add[agent] = [s[agent],a[agent],re[agent]
                                     ,d[agent],am[agent],m[agent]]
 
-        self.update_buffers(information_to_add, training_team)
+        self.update_buffers(information_to_add)
         
         return cum_reward/2, n_cycles
             # stock avery transition 
@@ -301,26 +304,17 @@ class Runner():
         else: 
             return self.blue_team   
 
-    def remaining_enemy_agents(self, agents, training_team):
-        en = [] 
-        for agent   in agents:
-            if not (training_team in agent):
-                en.append(agent)
-        return en
-
     def info(self, training_team):
         obs, r, done, i = self.env.last()
-        remain_agents = self.env.agents
-        enemy = self.remaining_enemy_agents(remain_agents, training_team)
-        if len(enemy) >= 1 & len(enemy) < self.remaining_opponent_agents:
-            r = 1
+        enemy = self.other_team_members(training_team)
+        if (len(enemy) > 1) & (len(enemy) < (self.remaining_opponent_agents)):
+            r = 0.3
             self.remaining_opponent_agents = self.remaining_opponent_agents - 1
-
         return obs, r, done, i
 
         
-    def update_buffers(self, information_to_add, training_team):
-        for agent in self.team_to_train(training_team):
+    def update_buffers(self, information_to_add):
+        for agent in self.NAME_AGENTS:
             s = information_to_add[agent][0]
             a = information_to_add[agent][1]
             re = information_to_add[agent][2]
@@ -350,14 +344,13 @@ class Runner():
             return self.blue_team
         else: 
             return self.red_team
-
     def sync(self, training_team):
         team = self.team_to_train(training_team)
         for agent in team:
             self.agents[agent].sync()
 
     def train(self, training_team):
-        writer = SummaryWriter('src/runs/Ep300000')
+        writer = SummaryWriter('src/runs/Sim2_10x10_3a_5m_')
         for episode in range(self.N_EPISODES):
             r, n_cycles = self.generate(training_team, episode)
             self.mix_buffer(training_team)
@@ -381,7 +374,7 @@ class Runner():
             
 
     def save(self, episode):
-        filename = f"sim_indexComNoObstacles_{self.N_EPISODES}_{episode}.pk"
+        filename = f"Sim2_10x10_3a_5m_{episode}.pk"
         torch.save(self.net.state_dict(), './nets/RIAL/ '+ filename)
 
     def learn(self, training_team, batch):
@@ -449,26 +442,49 @@ class Runner():
 
     def demo(self,training_team):
         inin = input('do you wonna run a demo ? ')
+        cycle = 0
         while inin == 'y':
-            self.reset_epsilon(training_team)
             self.env.reset()
+            self.reset_epsilon(training_team)
+            
             self.msg = {'blue' : 0, 'red': 0}
             message = 0
             for agent in self.env.agent_iter():
+                last_agent = self.env.agents[0]
                 obs, _, done, _ = self.env.last()
                 if training_team in agent:
                     action, message = self.agents[agent].get_target_action(obs, done, self.msg[training_team])
                     self.msg[training_team] = message
-                    print(f"{agent} sent the message {action}")
+                    print(f"agent {agent} sent the message {message}")
                 else:
                     # selector(self, observation, done, msg)
-                    self.agents[agent].epsilon = 1
-                    action, message = self.agents[agent].selector(obs, done, 0)
-                    
-                self.env.step(action if not done else None)
+                    action, message = self.agents[agent].selector(obs, done, self.msg[self.other_team(training_team)])
+                    self.msg[self.other_team(training_team)] = 0
+
                 self.env.render()
+                
+                # time.sleep(20)
+                self.env.step(action if not done else None)
+                if agent == last_agent:
+                    screen = auto.screenshot()
+                    screen.save(f'./recordings/Terr2_5_{cycle}.jpg')
+                    cycle += 1
+                
             inin = input('do you wonna run a demo ? ')
-     
+    def team_buffers(self, training_team):
+        self.team_buffer = {}
+        for agent in self.NAME_AGENTS:
+            if training_team in agent:
+                self.team_buffer[agent] = copy.deepcopy(self.buffer[agent])
+    def min_length_buffer(self):
+        pass
+    def mix_buffers(self):
+        self.team_buffer = self.team_buffer
+        min_len = min(self.team.buffer.values)
+        pass
+
+    def VDN_learn(self):
+        pass  
 
 class epsilon_params():
     def __init__(self, A = 0.3, B = 0.1, C = 0.1):
@@ -485,11 +501,12 @@ if __name__ == '__main__':
     # runner.generate('blue', 1)
     # runner.demo(training_team = 'blue')
     
-    eval = False
+    eval = True
     if eval == True:
-        file_path = os.path.abspath('nets/RIAL/sim_indexComNoObstacles_120000_119999.pk')
+        file_path = os.path.abspath('nets/RIAL/ Sim2_terComplicated_5m300000_299999.pk')
         runner.net.load_state_dict(torch.load(file_path))
-        runner.demo(training_team = 'red')
+        runner.sync('blue')
+        runner.demo(training_team = 'blue')
     else:
         loss = runner.train('blue')
         runner.demo(training_team = 'blue')

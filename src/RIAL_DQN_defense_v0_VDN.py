@@ -470,7 +470,20 @@ class Runner():
 
     def VDN_learn(self):
         pass  
-
+    
+    def MixerVDN(self, training_team):
+        # get the training team
+        team = self.team_to_train(training_team)
+        max_size = self.CAPACITY_AGENT
+        min_agent = ''
+        # get the minimum buffer size 
+        for agent in team:
+            if self.buffer[agent].__len__() < max_size:
+                min_agent = agent
+                max_size = self.buffer[agent].__len__()
+        
+        return min_agent,max_size
+        # update the buffer for the 
 class epsilon_params():
     def __init__(self, A = 0.3, B = 0.1, C = 0.1):
         self.A = A
@@ -486,11 +499,11 @@ if __name__ == '__main__':
     # runner.generate('blue', 1)
     # runner.demo(training_team = 'blue')
     
-    eval = False
+    eval = True
     if eval == True:
-        file_path = os.path.abspath('nets/RIAL/99000.pk')
+        file_path = os.path.abspath('nets/RIAL/ Sim2_terComplicated_5m300000_299999.pk')
         runner.net.load_state_dict(torch.load(file_path))
-        runner.demo(training_team = 'red')
+        runner.demo(training_team = 'blue')
     else:
         loss = runner.train('blue')
         runner.demo(training_team = 'blue')
