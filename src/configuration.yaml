@@ -1,7 +1,7 @@
 # parameters  
 
 # environment 
-TERRAIN : 'central_7x7_2v2_obsdiff' #'central_7x7_2v2' # 'central_7x7_2v2' #'central01_10x10'
+TERRAIN : 'central_10x10' #'central_7x7_2v2' # 'central_7x7_2v2' #'central01_10x10'
 MAX_CYCLES : 200
 
 # simulation 
@@ -20,9 +20,9 @@ B : 0.2
 C : 0.1
 
 # BUFFER PARAMETRS
-CAPACITY_AGENT : 110
-CAPACITY : 5000
-BATCH_SIZE : 100
+CAPACITY_AGENT : 210
+CAPACITY : 8000
+BATCH_SIZE : 1000
 
 # NETWORKX
 LEARNING_RATE : 0.001

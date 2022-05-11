@@ -350,7 +350,7 @@ class Runner():
             self.agents[agent].sync()
 
     def train(self, training_team):
-        writer = SummaryWriter('src/runs/Sim2_10x10_3a_5m_')
+        writer = SummaryWriter('src/runs/central_10x10')
         for episode in range(self.N_EPISODES):
             r, n_cycles = self.generate(training_team, episode)
             self.mix_buffer(training_team)
@@ -374,7 +374,7 @@ class Runner():
             
 
     def save(self, episode):
-        filename = f"Sim2_10x10_3a_5m_{episode}.pk"
+        filename = f"central_10x10_3x3.pk"
         torch.save(self.net.state_dict(), './nets/RIAL/ '+ filename)
 
     def learn(self, training_team, batch):
@@ -501,7 +501,7 @@ if __name__ == '__main__':
     # runner.generate('blue', 1)
     # runner.demo(training_team = 'blue')
     
-    eval = True
+    eval = False
     if eval == True:
         file_path = os.path.abspath('nets/RIAL/ Sim2_terComplicated_5m300000_299999.pk')
         runner.net.load_state_dict(torch.load(file_path))
