@@ -140,7 +140,7 @@ class Agent():
                 Qm = qma[self.n_actions:]
                 # from Qa we will choose the action and from Qm we will choose the message
                 action = Qa.cpu().squeeze().argmax().item() if not done else 0
-                message = Qm.cpu().squeeze().max().item() if not done else 0 # argmax
+                message = Qm.cpu().squeeze().argmax().item() if not done else 0 # argmax
         return action, message
             
     def set_epsilon(self, N_episodes, episode):
@@ -263,14 +263,14 @@ class Runner():
                 self.agents[agent].set_epsilon(self.N_EPISODES, episode)
                 # take the observation / the action and 
                 m[agent].append(self.msg[training_team])
-                action, message = self.agents[agent].selector(observation = obs, done = done, msg = self.msg[training_team])
+                action, message = self.agents[agent].selector(observation = obs, done = done, msg = 0)
                 a[agent].append(action)
                 self.msg[training_team] = message
                 cum_reward += re[agent][-1]
             else: 
                 self.agents[agent].epsilon = 1
                 self.msg[self.other_team(training_team)] = 0
-                action, message = self.agents[agent].selector(observation = obs, done = done, msg = self.msg[self.other_team(training_team)])
+                action, message = self.agents[agent].selector(observation = obs, done = done, msg = 0)
                 message = 0 # so there is no communication done
                 # fixe the opponent 
                 # action = 0
@@ -347,7 +347,7 @@ class Runner():
             self.agents[agent].sync()
 
     def train(self, training_team):
-        writer = SummaryWriter('src/runs/Sim1m_3000ep_Qvals')
+        writer = SummaryWriter('src/runs/VDN_nocom_blue_down')
         for episode in range(self.N_EPISODES):
             r, n_cycles = self.generate(training_team, episode)
             self.mix_buffer(training_team)
@@ -371,7 +371,7 @@ class Runner():
             
 
     def save(self, episode):
-        filename = f"VDN_test_blue_down.pk"
+        filename = f"VDN_nocom_blue_down.pk"
         torch.save(self.net.state_dict(), './nets/RIAL/ '+ filename)
 
     def learn(self, training_team, batch):
@@ -519,7 +519,7 @@ class Runner():
 
     def train_fromVDN(self, training_team):
         # all what we use is from the big buffer 
-        writer = SummaryWriter('src/runs/VDN_test')
+        writer = SummaryWriter('src/runs/VDN_nocom_blue_down')
         for episode in range(self.N_EPISODES):
             r, n_cycles = self.generate(training_team, episode)
             self.MixerVDN(training_team)
@@ -594,8 +594,10 @@ class epsilon_params():
     
 
 if __name__ == '__main__':
-    configuration_file = r'configuration.yaml'
+    configuration_file = r'configuration_VDN_nocom_blue_down.yaml'
     runner = Runner(configuration_file)
+    # runner.generate('blue', 1)
+    # runner.demo(training_team = 'blue')
     
     eval = False
     if eval == True:
@@ -608,4 +610,5 @@ if __name__ == '__main__':
         runner.train_fromVDN('blue')
         runner.demo(training_team = 'blue')
    
+
 

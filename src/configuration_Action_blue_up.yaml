@@ -1,7 +1,7 @@
 # parameters  
 
 # environment 
-TERRAIN : 'central_7x7_2v2_obsdiff' # 'central_7x7_2v2' #'central01_10x10'
+TERRAIN : 'blue_up' # 'central_7x7_2v2' #'central01_10x10'
 MAX_CYCLES : 100
 
 # simulation 
@@ -10,7 +10,7 @@ EPSILON_START : 1
 UPDATE_TIME : 20 # update each 300 episodes 
 PRINT_TIME : 2000
 INPUT_MESSAGES : 1
-OUTPUT_MESSAGES : 5
+OUTPUT_MESSAGES : 1
 HIDDEN_LAYER : 132
 DEVICE : 'cpu'
 
@@ -25,6 +25,6 @@ CAPACITY : 5000
 BATCH_SIZE : 100
 
 # NETWORKX
-LEARNING_RATE : 0.0001
+LEARNING_RATE : 0.001
 GAMMA : 0.9
 DROPOUT : 0

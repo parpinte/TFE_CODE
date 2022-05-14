@@ -64,9 +64,49 @@ class Buffer():
             np.array(action_mask),
             np.array(message),
             np.array(next_message)
+            
         )
     def clear(self):
         self.buffer.clear()
+################## buffer Qmix ####################
+class Buffer_Qmix():
+    # create the buffer size 
+    def __init__(self, capacity):
+        self.buffer = collections.deque(maxlen = capacity)
+        
+    # get buffer siz 
+    def __len__(self):
+        return len(self.buffer)
+    # add an experience to the queue 
+
+    def add(self,experience):
+        self.buffer.append(experience)
+
+    def show_content(self):
+        for idx, exp in enumerate(self.buffer):
+            print(f"Experience {idx} ==> {self.buffer[idx]}")
+    # sample from the buffer 
+    
+    def sample(self, batch_size):
+        # generate batch size indexes to get miltiple experiences 
+        indices = np.random.choice(len(self.buffer), batch_size, replace=False) 
+        # get the different varianbles 
+        state, action, reward,  new_state, is_done, action_mask, message, next_message, global_state ,global_state_next= zip(*[self.buffer[idx] for idx in indices])
+        return (
+            np.array(state),
+            np.array(action),
+            np.array(reward),
+            np.array(new_state),
+            np.array(is_done),
+            np.array(action_mask),
+            np.array(message),
+            np.array(next_message),
+            np.array(global_state),
+            np.array(global_state_next)
+        )
+    def clear(self):
+        self.buffer.clear()
+
 
 ############### DQN Agent ####################
 class DQN(nn.Module):
@@ -94,8 +134,53 @@ class DQN(nn.Module):
         output = self.linear(x)
         return output
 
+############################# Qmix ######################################""
+class QMixer(nn.Module):
+    def __init__(self, n_agents, hidden_layer_dim, state_shape, **kwargs):
+        super(QMixer, self).__init__()
+        # W1 have to be a matrix of nagents * hidden_layer_dim 
+        # with pytorch we will create an output of n_agents * hidden_layer_dim and than we will do a reshape 
+        self.n_agents = n_agents
+        self.hidden_layer_dim = hidden_layer_dim
+        self.state_shape = state_shape
+        self.ELU = nn.ELU()
+        # create the hyper networks 
+        self.w1_layer  = nn.Linear(self.state_shape, self.n_agents * self.hidden_layer_dim)
+        self.w2_layer  = nn.Linear(self.state_shape, 1 * self.hidden_layer_dim) # size (batch , 1 )
+        self.p = kwargs.get('dropout', 0.25)
+        self.dropout = nn.Dropout(p = self.p)
+        # consranare 
+        self.b1 = nn.Linear(self.state_shape, self.hidden_layer_dim)
+        # at b2 we have to get 1 output which is the Qtot 
+        self.b2 = nn.Sequential(
+                                nn.Dropout(p = self.p),
+                                nn.Linear(self.state_shape, self.state_shape),   # , self.hidden_layer_dim
+                                nn.ReLU(),
+                                nn.Dropout(p = self.p),
+                                nn.Linear(self.state_shape, 1)  # self.hidden_layer_dim, 1
+                                )   
 
-################### Agent ########################
+
+    # how do we have to do the forward ? 
+    def forward(self, states, q_values):
+        states = self.dropout(states)
+        w1 = torch.abs(self.w1_layer(states))
+        w1 = w1.reshape(-1, self.n_agents, self.hidden_layer_dim)
+
+        w2 = torch.abs(self.w2_layer(states))
+        w2 = w2.reshape(-1,self.hidden_layer_dim, 1)
+
+        b1 = self.b1(states).reshape((-1, 1, self.hidden_layer_dim))
+
+        b2 = self.b2(states).reshape((-1, 1, 1))
+
+        out1 = self.ELU(torch.add(torch.bmm(q_values,w1), b1))
+        Qtot = torch.add(torch.bmm(out1, w2), b2)
+        Qtot = Qtot.reshape(-1)
+
+        return Qtot
+
+#####
 
 class Agent():
     def __init__(self, name, net_parameters, net, epsilon_params,**kwargs):
@@ -208,11 +293,10 @@ class Runner():
         self.net = DQN(input_nodes = self.STATE_SHAPE + self.INPUT_MESSAGES, hidden_nodes = self.HIDDEN_LAYER, output_nodes = self.ACTION_SPACE + self.OUTPUT_MESSAGES, dropout = self.DROPOUT).to(self.DEVICE)
         self.agents = {}
         self.buffer = {}
-        self.Big_buffer = Buffer(capacity = self.CAPACITY)
+        self.Big_buffer = Buffer_Qmix(capacity = self.CAPACITY)
         self.remaining_opponent_agents = len(self.NAME_AGENTS)/2
         self.CAPACITY_AGENT = self.params['CAPACITY_AGENT']
-        self.net_params = self.net.parameters()
-        self.optimizer = torch.optim.Adam(self.net_params, self.LEARNING_RATE)
+        
         for agent in self.NAME_AGENTS:
             self.agents[agent] = Agent(agent, 
                                      net_parameters = [self.STATE_SHAPE, self.INPUT_MESSAGES, self.HIDDEN_LAYER, self.ACTION_SPACE, self.OUTPUT_MESSAGES], 
@@ -220,11 +304,17 @@ class Runner():
                                     epsilon_params = self.EPS, device = self.DEVICE)
             self.buffer[agent] = Buffer(capacity= self.CAPACITY_AGENT)
            
-
-        self.Experience = collections.namedtuple('Experience',['state','action','reward','new_state','is_done','action_mask', 'message','next_message'])
+        self.Qmix_experience = collections.namedtuple('Experience',['state','action','reward','new_state',
+                'is_done','action_mask', 'message','next_message', 'total_state','global_state_next'])
+        self.Experience = collections.namedtuple('Experience',['state','action','reward','new_state',
+                            'is_done','action_mask', 'message','next_message'])
         self.msg = {'blue' : 0, 'red': 0}
         self.MSE = nn.MSELoss()
-        
+        self.mixer = QMixer(n_agents = int(len(self.NAME_AGENTS)/2), hidden_layer_dim = self.HIDDEN_LAYER, state_shape = self.STATE_SHAPE, dropout = self.DROPOUT).to(self.DEVICE)
+        self.mixer_target = copy.deepcopy(self.mixer)
+        self.mixer_target.eval()
+        self.net_params = list(self.net.parameters()) + list(self.mixer.parameters())
+        self.optimizer = torch.optim.Adam(self.net_params, self.LEARNING_RATE)
         
         
         
@@ -243,7 +333,7 @@ class Runner():
         self.env.reset()
         n = int(len(self.env.agents))
         s,a,re,d,am,m = {},{},{},{},{},{}
-        
+        global_state, global_state_next = [],[]
         n_cycles = 0
         cum_reward = 0.0
         for agent in self.NAME_AGENTS:
@@ -277,9 +367,18 @@ class Runner():
                 # 
                 a[agent].append(action) 
                 m[agent].append(message)
+            # print(self.survivors(training_team))
+            if agent in self.survivors(training_team):
+                if (agent == self.survivors(training_team)[0]):
+                    global_state.append(self.env.state())
+
+            
 
             if agent == last_agent:
                 n_cycles +=1
+
+            
+                
             
             self.env.step(action if not done else None)
         # lsr = re['blue_0'][-1]
@@ -292,7 +391,7 @@ class Runner():
 
         self.update_buffers(information_to_add)
         
-        return cum_reward/2, n_cycles
+        return cum_reward/2, n_cycles, global_state
             # stock avery transition 
     def other_team_members(self, training_team):
         
@@ -342,93 +441,18 @@ class Runner():
         else: 
             return self.red_team
     def sync(self, training_team):
+        self.mixer_target.load_state_dict(self.mixer.state_dict())
         team = self.team_to_train(training_team)
         for agent in team:
             self.agents[agent].sync()
 
-    def train(self, training_team):
-        writer = SummaryWriter('src/runs/Sim1m_3000ep_Qvals')
-        for episode in range(self.N_EPISODES):
-            r, n_cycles = self.generate(training_team, episode)
-            self.mix_buffer(training_team)
-            while self.BATCH_SIZE > self.Big_buffer.__len__():
-                self.generate(training_team, episode)
-                self.mix_buffer(training_team)
-
-            batch = self.Big_buffer.sample(self.BATCH_SIZE)
-            loss = self.learn(training_team, batch)
-            if episode % (self.UPDATE_TIME) == 0:
-                    self.sync(training_team)
-                    
-            if (episode % self.PRINT_TIME == 0) | (episode == self.N_EPISODES - 1):
-                print(f'episode = {episode} | average reward {r} | loss = {loss} | epsilon = {self.agents[self.team_to_train(training_team)[0]].epsilon} | n_cycles = {n_cycles}')
-                self.save(episode)
-
-            writer.add_scalar('reward', r, episode)
-            writer.add_scalar('loss', loss, episode)
-            writer.add_scalar('epsilon',self.agents[self.team_to_train(training_team)[0]].epsilon, episode)
-            writer.add_scalar('n_cycles', n_cycles, episode)
+    
             
 
     def save(self, episode):
-        filename = f"VDN_test_blue_down.pk"
+        filename = f"sim_Qmixcenral_7x7.pk"
         torch.save(self.net.state_dict(), './nets/RIAL/ '+ filename)
 
-    def learn(self, training_team, batch):
-        # self.Experience(s[idx], a[idx], re[idx+1], s[idx+1], d[idx], am[idx],m[idx + 1])
-        # current state
-        state = batch[0]
-        state_tensor = torch.tensor(state, device = self.DEVICE, dtype = torch.float32)
-        # need the messages 
-        messages = batch[6]
-        message_tensor = torch.tensor(messages, device = self.DEVICE, dtype = torch.float32).unsqueeze(1)
-        # next state
-        state_ = batch[3]
-        state_tensor_ = torch.tensor(state_, device = self.DEVICE, dtype = torch.float32)
-        # get the q values 
-        in_tensor = torch.cat((state_tensor, message_tensor),1)
-        Qvalues = self.net(in_tensor)
-        Qa = Qvalues[:,:self.ACTION_SPACE]
-        # Qm = Qvalues[:,self.ACTION_SPACE:]
-        # choose the Q values for the corresponding actions 
-        # take the actions
-        actions = batch[1]
-        actions_tensor = torch.tensor(actions, device = self.DEVICE, dtype = torch.int64).unsqueeze(1)
-        Qa = torch.gather(Qa, 1, actions_tensor).flatten()
-        # get the reward 
-        reward = batch[2] 
-        # get target Q 
-        is_done = batch[4]
-        is_done_tensor = torch.tensor(is_done, device = self.DEVICE, dtype = torch.float32)
-        indexes = torch.where(is_done_tensor == 0)[0]
-        messages_next = batch[7]
-        messages_next_tensor = torch.tensor(messages_next, device = self.DEVICE, dtype = torch.float32).unsqueeze(1)
-        with torch.no_grad():
-            reward_tensor = torch.tensor(reward, device = self.DEVICE, dtype = torch.float32)
-            in_tensor_ = torch.cat((state_tensor_, messages_next_tensor),1)
-            Qvalues_ = self.agents[self.team_to_train(training_team)[0]].target_net(in_tensor_)
-            Qa_ = Qvalues_[:,:self.ACTION_SPACE]
-            Q_target = Qa_.max(dim = 1)[0].flatten()
-            reward_tensor = self.shape_reward(reward_tensor, indexes)
-            target = reward_tensor + self.GAMMA * Q_target *  (1 - is_done_tensor)
-            target = target.flatten()
-
-        # compue the loss 
-        criterion = nn.MSELoss()
-        loss = criterion(target, Qa)
-        self.optimizer.zero_grad()
-        loss.backward()
-        self.optimizer.step()
-
-        return loss
-
-    def shape_reward(self, tensor, idx):
-        a = tensor[idx] < 0
-        r = tensor[idx]
-        r[a] = -1.0
-        tensor[idx] = r
-
-        return tensor
 
     def reset_epsilon(self, training_team):
         for agent in self.NAME_AGENTS:
@@ -468,10 +492,10 @@ class Runner():
         min_len = min(self.team.buffer.values)
         pass
 
-    def VDN_learn(self):
-        pass  
     
-    def MixerVDN(self, training_team):
+
+    def MixerQmix(self, training_team, global_state):
+        
         # get the training team
         team = self.team_to_train(training_team)
         
@@ -495,9 +519,9 @@ class Runner():
                     message.append(self.buffer[agent].buffer[idx].message)
                     next_message.append(self.buffer[agent].buffer[idx].next_message)
                 else:
-                    state.append(np.zeros(self.STATE_SHAPE))
+                    state.append(self.buffer[agent].buffer[-1].state) #np.zeros(self.STATE_SHAPE))
                     action.append(0)
-                    new_state.append(np.zeros(self.STATE_SHAPE))
+                    new_state.append(self.buffer[agent].buffer[-1].state)#np.zeros(self.STATE_SHAPE))
                     reward.append(0)
                     is_done.append(1)
                     action_mask.append(np.ones(self.ACTION_SPACE))
@@ -512,23 +536,23 @@ class Runner():
             message = np.array(message)
             next_message = np.array(next_message)
             is_done = np.array(is_done)
-            self.Big_buffer.add(self.Experience(state,action,reward,new_state,is_done,action,message,next_message))
+            self.Big_buffer.add(self.Qmix_experience(state,action,reward,new_state,
+                        is_done,action,message,next_message, global_state[idx] ,global_state[idx+ 1]))
 
         for agent in team:
             self.buffer[agent].clear()
 
-    def train_fromVDN(self, training_team):
-        # all what we use is from the big buffer 
-        writer = SummaryWriter('src/runs/VDN_test')
+    def train_from_Qmix(self, training_team):
+        writer = SummaryWriter('src/runs/central_10x10_Qmix')
         for episode in range(self.N_EPISODES):
-            r, n_cycles = self.generate(training_team, episode)
-            self.MixerVDN(training_team)
+            r, n_cycles, global_state = self.generate(training_team, episode)
+            self.MixerQmix(training_team,global_state)
             while self.BATCH_SIZE > self.Big_buffer.__len__():
-                self.generate(training_team, episode)
-                self.MixerVDN(training_team)
-
+                _,_, global_state = self.generate(training_team, episode)
+                self.MixerQmix(training_team, global_state)
+            
             batch = self.Big_buffer.sample(self.BATCH_SIZE)
-            loss = self.learn_from_VDN(training_team, batch)
+            loss = self.learn_from_Qmix(training_team, batch)
             if episode % (self.UPDATE_TIME) == 0:
                     self.sync(training_team)
                     
@@ -541,9 +565,15 @@ class Runner():
             writer.add_scalar('epsilon',self.agents[self.team_to_train(training_team)[0]].epsilon, episode)
             writer.add_scalar('n_cycles', n_cycles, episode)
 
-            
+    def survivors(self, training_team):
+        remaining_agents = self.env.agents
+        s = []
+        for agent in remaining_agents:
+            if training_team in agent:
+                s.append(agent)
+        return s
 
-    def learn_from_VDN(self, training_team, batch):
+    def learn_from_Qmix(self, training_team, batch):
         state = batch[0]
         state_tensor = torch.tensor(state, device = self.DEVICE, dtype = torch.float32) # (batch, 2 agent , size obs)
         messages = batch[6]
@@ -557,32 +587,38 @@ class Runner():
         actions = batch[1]
         actions_tensor = torch.tensor(actions, device = self.DEVICE, dtype= torch.int64).unsqueeze(2)
         Qa = torch.gather(Qa, 2, actions_tensor).squeeze(2)
-        QaVDN = Qa.sum(dim = 1)
-        # need the reward 
+        global_state = batch[8]
+        global_state_tensor = torch.tensor(global_state, device = self.DEVICE, dtype= torch.float32)
+        Qa = Qa.unsqueeze(1)
+        Qmix = self.mixer(global_state_tensor, Qa)
         reward = batch[2] 
         is_done = batch[4]
         is_done_tensor = torch.tensor(is_done, device = self.DEVICE, dtype = torch.float32)
         messages_next = batch[7]
         messages_next_tensor = torch.tensor(messages_next, device = self.DEVICE, dtype = torch.float32).unsqueeze(2)
+        global_state_next = batch[9]
+        global_state_next_tensor = torch.tensor(global_state_next, device =self.DEVICE, dtype = torch.float32)
         with torch.no_grad():
             is_done_tensor = torch.tensor(is_done_tensor, device = self.DEVICE, dtype = torch.bool)
             reward_tensor = torch.tensor(reward, device = self.DEVICE, dtype = torch.float32)
             in_tensor_ = torch.cat((state_tensor_, messages_next_tensor),2)
             Qvalues_ = self.agents[self.team_to_train(training_team)[0]].target_net(in_tensor_)
-            Qa_ = Qvalues_[:,:,:self.ACTION_SPACE]
+            Qa_ = (Qvalues_[:,:,:self.ACTION_SPACE])
             Q_target = Qa_.max(dim = 2)[0]
             Q_target[is_done_tensor] = 0
-            QVDN = Q_target.sum(dim = 1)
-            RVDN = reward_tensor.sum(dim = 1)
-            target = RVDN + self.GAMMA * QVDN
-
+            Q_target = Q_target.unsqueeze(1)
+            Q_target_mixer = self.mixer_target(global_state_next_tensor, Q_target)
+            reward_qmix = reward_tensor.mean(dim = 1)
+            target = reward_qmix + self.GAMMA * Q_target_mixer
+        
         criterian = nn.MSELoss()
-        loss = criterian(QaVDN, target)
+        loss = criterian(Qmix, target)
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
 
         return loss
+
 
 class epsilon_params():
     def __init__(self, A = 0.3, B = 0.1, C = 0.1):
@@ -594,8 +630,10 @@ class epsilon_params():
     
 
 if __name__ == '__main__':
-    configuration_file = r'configuration.yaml'
+    configuration_file = r'configuration_Qmix.yaml'
     runner = Runner(configuration_file)
+    # runner.generate('blue', 1)
+    # runner.demo(training_team = 'blue')
     
     eval = False
     if eval == True:
@@ -605,7 +643,19 @@ if __name__ == '__main__':
         runner.demo(training_team = 'blue')
 
     else:
-        runner.train_fromVDN('blue')
+        runner.train_from_Qmix('blue')
         runner.demo(training_team = 'blue')
    
+
+"""
+
+state.append(self.buffer[agent].buffer[idx-1].state)
+                    action.append(self.buffer[agent].buffer[idx-1].action)
+                    new_state.append(self.buffer[agent].buffer[idx-1].new_state)
+                    reward.append(self.buffer[agent].buffer[idx-1].reward)
+                    is_done.append(self.buffer[agent].buffer[idx-1].is_done)
+                    action_mask.append(self.buffer[agent].buffer[idx-1].action_mask)
+                    message.append(self.buffer[agent].buffer[idx-1].message)
+                    next_message.append(self.buffer[agent].buffer[idx-1].next_message)
+"""
 

@@ -31,6 +31,8 @@ import matplotlib.pyplot as plt
 from tensorboardX import SummaryWriter 
 import yaml
 
+# to take screenshot
+
 ############################# Buffer class ####################################################"" 
 class Buffer():
     # create the buffer size 
@@ -140,7 +142,7 @@ class Agent():
                 Qm = qma[self.n_actions:]
                 # from Qa we will choose the action and from Qm we will choose the message
                 action = Qa.cpu().squeeze().argmax().item() if not done else 0
-                message = Qm.cpu().squeeze().max().item() if not done else 0 # argmax
+                message = Qm.cpu().squeeze().argmax().item() if not done else 0 # argmax
         return action, message
             
     def set_epsilon(self, N_episodes, episode):
@@ -265,7 +267,7 @@ class Runner():
                 m[agent].append(self.msg[training_team])
                 action, message = self.agents[agent].selector(observation = obs, done = done, msg = self.msg[training_team])
                 a[agent].append(action)
-                self.msg[training_team] = message
+                self.msg[training_team] = message # message
                 cum_reward += re[agent][-1]
             else: 
                 self.agents[agent].epsilon = 1
@@ -280,8 +282,9 @@ class Runner():
 
             if agent == last_agent:
                 n_cycles +=1
-            
+            # self.env.render()
             self.env.step(action if not done else None)
+            # self.env.render()
         # lsr = re['blue_0'][-1]
         # print(f'last reward {lsr}')
         # add the information to the batch 
@@ -347,7 +350,7 @@ class Runner():
             self.agents[agent].sync()
 
     def train(self, training_team):
-        writer = SummaryWriter('src/runs/Sim1m_3000ep_Qvals')
+        writer = SummaryWriter('src/runs/RIAL_2m_blue_down')
         for episode in range(self.N_EPISODES):
             r, n_cycles = self.generate(training_team, episode)
             self.mix_buffer(training_team)
@@ -371,7 +374,7 @@ class Runner():
             
 
     def save(self, episode):
-        filename = f"VDN_test_blue_down.pk"
+        filename = f"RIAL_2m_blue_down.pk"
         torch.save(self.net.state_dict(), './nets/RIAL/ '+ filename)
 
     def learn(self, training_team, batch):
@@ -439,22 +442,32 @@ class Runner():
 
     def demo(self,training_team):
         inin = input('do you wonna run a demo ? ')
+        cycle = 0
         while inin == 'y':
-            self.reset_epsilon(training_team)
             self.env.reset()
+            self.reset_epsilon(training_team)
+            
             self.msg = {'blue' : 0, 'red': 0}
             message = 0
             for agent in self.env.agent_iter():
+                last_agent = self.env.agents[0]
                 obs, _, done, _ = self.env.last()
                 if training_team in agent:
                     action, message = self.agents[agent].get_target_action(obs, done, self.msg[training_team])
                     self.msg[training_team] = message
+                    print(f"agent {agent} sent the message {message}")
                 else:
                     # selector(self, observation, done, msg)
                     action, message = self.agents[agent].selector(obs, done, self.msg[self.other_team(training_team)])
                     self.msg[self.other_team(training_team)] = 0
-                self.env.step(action if not done else None)
+
                 self.env.render()
+                
+                # time.sleep(20)
+                self.env.step(action if not done else None)
+                if agent == last_agent:
+                    cycle += 1
+                
             inin = input('do you wonna run a demo ? ')
     def team_buffers(self, training_team):
         self.team_buffer = {}
@@ -470,119 +483,6 @@ class Runner():
 
     def VDN_learn(self):
         pass  
-    
-    def MixerVDN(self, training_team):
-        # get the training team
-        team = self.team_to_train(training_team)
-        
-        max_size = 0
-        # get the minimum buffer size 
-        for agent in team:
-            if self.buffer[agent].__len__() > max_size:
-                max_size = self.buffer[agent].__len__()
-            
-        
-        for idx in range(max_size):
-            state, action, reward, new_state,is_done,action_mask,message,next_message = [],[], [], [], [], [], [], []
-            for agent in team:
-                if idx <= self.buffer[agent].__len__() - 1:
-                    state.append(self.buffer[agent].buffer[idx].state)
-                    action.append(self.buffer[agent].buffer[idx].action)
-                    new_state.append(self.buffer[agent].buffer[idx].new_state)
-                    reward.append(self.buffer[agent].buffer[idx].reward)
-                    is_done.append(self.buffer[agent].buffer[idx].is_done)
-                    action_mask.append(self.buffer[agent].buffer[idx].action_mask)
-                    message.append(self.buffer[agent].buffer[idx].message)
-                    next_message.append(self.buffer[agent].buffer[idx].next_message)
-                else:
-                    state.append(np.zeros(self.STATE_SHAPE))
-                    action.append(0)
-                    new_state.append(np.zeros(self.STATE_SHAPE))
-                    reward.append(0)
-                    is_done.append(1)
-                    action_mask.append(np.ones(self.ACTION_SPACE))
-                    message.append(0)
-                    next_message.append(0)
-
-            state = np.array(state)
-            action_mask = np.array(action_mask)
-            action = np.array(action)
-            new_state = np.array(new_state)
-            reward = np.array(reward)
-            message = np.array(message)
-            next_message = np.array(next_message)
-            is_done = np.array(is_done)
-            self.Big_buffer.add(self.Experience(state,action,reward,new_state,is_done,action,message,next_message))
-
-        for agent in team:
-            self.buffer[agent].clear()
-
-    def train_fromVDN(self, training_team):
-        # all what we use is from the big buffer 
-        writer = SummaryWriter('src/runs/VDN_test')
-        for episode in range(self.N_EPISODES):
-            r, n_cycles = self.generate(training_team, episode)
-            self.MixerVDN(training_team)
-            while self.BATCH_SIZE > self.Big_buffer.__len__():
-                self.generate(training_team, episode)
-                self.MixerVDN(training_team)
-
-            batch = self.Big_buffer.sample(self.BATCH_SIZE)
-            loss = self.learn_from_VDN(training_team, batch)
-            if episode % (self.UPDATE_TIME) == 0:
-                    self.sync(training_team)
-                    
-            if (episode % self.PRINT_TIME == 0) | (episode == self.N_EPISODES - 1):
-                print(f'episode = {episode} | average reward {r} | loss = {loss} | epsilon = {self.agents[self.team_to_train(training_team)[0]].epsilon} | n_cycles = {n_cycles}')
-                self.save(episode)
-
-            writer.add_scalar('reward', r, episode)
-            writer.add_scalar('loss', loss, episode)
-            writer.add_scalar('epsilon',self.agents[self.team_to_train(training_team)[0]].epsilon, episode)
-            writer.add_scalar('n_cycles', n_cycles, episode)
-
-            
-
-    def learn_from_VDN(self, training_team, batch):
-        state = batch[0]
-        state_tensor = torch.tensor(state, device = self.DEVICE, dtype = torch.float32) # (batch, 2 agent , size obs)
-        messages = batch[6]
-        messages_tensor = torch.tensor(messages, device = self.DEVICE, dtype = torch.float32).unsqueeze(2) #(batch, n agents,1)
-        state_ = batch[3]
-        state_tensor_ = torch.tensor(state_, device = self.DEVICE, dtype = torch.float32) # (batch, n agents, size obs)
-        in_tensor = torch.cat((state_tensor, messages_tensor),2)
-        Qvalues = self.net(in_tensor)
-        Qa = Qvalues[:,:,:self.ACTION_SPACE]
-        # take the different actions
-        actions = batch[1]
-        actions_tensor = torch.tensor(actions, device = self.DEVICE, dtype= torch.int64).unsqueeze(2)
-        Qa = torch.gather(Qa, 2, actions_tensor).squeeze(2)
-        QaVDN = Qa.sum(dim = 1)
-        # need the reward 
-        reward = batch[2] 
-        is_done = batch[4]
-        is_done_tensor = torch.tensor(is_done, device = self.DEVICE, dtype = torch.float32)
-        messages_next = batch[7]
-        messages_next_tensor = torch.tensor(messages_next, device = self.DEVICE, dtype = torch.float32).unsqueeze(2)
-        with torch.no_grad():
-            is_done_tensor = torch.tensor(is_done_tensor, device = self.DEVICE, dtype = torch.bool)
-            reward_tensor = torch.tensor(reward, device = self.DEVICE, dtype = torch.float32)
-            in_tensor_ = torch.cat((state_tensor_, messages_next_tensor),2)
-            Qvalues_ = self.agents[self.team_to_train(training_team)[0]].target_net(in_tensor_)
-            Qa_ = Qvalues_[:,:,:self.ACTION_SPACE]
-            Q_target = Qa_.max(dim = 2)[0]
-            Q_target[is_done_tensor] = 0
-            QVDN = Q_target.sum(dim = 1)
-            RVDN = reward_tensor.sum(dim = 1)
-            target = RVDN + self.GAMMA * QVDN
-
-        criterian = nn.MSELoss()
-        loss = criterian(QaVDN, target)
-        self.optimizer.zero_grad()
-        loss.backward()
-        self.optimizer.step()
-
-        return loss
 
 class epsilon_params():
     def __init__(self, A = 0.3, B = 0.1, C = 0.1):
@@ -594,18 +494,18 @@ class epsilon_params():
     
 
 if __name__ == '__main__':
-    configuration_file = r'configuration.yaml'
+    configuration_file = r'configuration_2m_blue_down.yaml'
     runner = Runner(configuration_file)
+    # runner.generate('blue', 1)
+    # runner.demo(training_team = 'blue')
     
     eval = False
     if eval == True:
-        file_path = os.path.abspath('nets/RIAL/ sim_VDNcenral_7x7.pk')
+        file_path = os.path.abspath('nets/RIAL/ Sim2_terComplicated_5m300000_299999.pk')
         runner.net.load_state_dict(torch.load(file_path))
         runner.sync('blue')
         runner.demo(training_team = 'blue')
-
     else:
-        runner.train_fromVDN('blue')
+        loss = runner.train('blue')
         runner.demo(training_team = 'blue')
    
-

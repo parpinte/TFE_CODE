@@ -466,8 +466,6 @@ class Runner():
                 # time.sleep(20)
                 self.env.step(action if not done else None)
                 if agent == last_agent:
-                    screen = auto.screenshot()
-                    screen.save(f'./recordings/Terr2_5_{cycle}.jpg')
                     cycle += 1
                 
             inin = input('do you wonna run a demo ? ')
@@ -495,7 +493,7 @@ class epsilon_params():
 
     
 
-if __name__ == '__main__':
+def main():
     configuration_file = r'configuration.yaml'
     runner = Runner(configuration_file)
     # runner.generate('blue', 1)
@@ -512,5 +510,8 @@ if __name__ == '__main__':
         runner.demo(training_team = 'blue')
    
 
+"""
 
-
+if __name__ == '__main__':
+    cProfile.run('main()')
+    """
