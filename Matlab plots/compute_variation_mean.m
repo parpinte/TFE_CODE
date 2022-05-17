@@ -1,7 +1,7 @@
-function [variance] = compute_variation(data,width_var)
+function [variance, moy] = compute_variation_mean(data,width_var)
     
 variance = zeros(length(data),1);
-
+moy = zeros(length(data),1);
 
 for idx = 1:length(data)
     if idx < (width_var/2)
@@ -13,8 +13,8 @@ for idx = 1:length(data)
     end
     sample = data(indexes);
 
-    variance(idx) = var(sample);
-    
+    variance(idx) = std(sample);
+    moy(idx) = mean(sample);
 
 end
 end

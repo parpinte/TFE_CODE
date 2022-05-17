@@ -1,0 +1,34 @@
+# parameters launch_test
+# parameters  
+
+# environment 
+TERRAIN : 'blue_up' # 'central_7x7_2v2' #'central01_10x10'
+MAX_CYCLES : 100
+
+# simulation 
+N_EPISODES : 300000
+EPSILON_START : 1
+UPDATE_TIME : 20 # update each 300 episodes 
+PRINT_TIME : 2000
+INPUT_MESSAGES_BLUE : 1
+INPUT_MESSAGES_RED : 1
+OUTPUT_MESSAGES_BLUE : 10
+OUTPUT_MESSAGES_RED : 2
+HIDDEN_LAYER : 132
+DEVICE_BLUE : 'cpu'
+DEVICE_RED : 'cpu'
+
+# EPSILON
+A : 0.4
+B : 0.2
+C : 0.1
+
+# BUFFER PARAMETRS
+CAPACITY_AGENT : 110
+CAPACITY : 5000
+BATCH_SIZE : 100
+
+# NETWORKX
+LEARNING_RATE : 0.0001
+GAMMA : 0.9
+DROPOUT : 0
