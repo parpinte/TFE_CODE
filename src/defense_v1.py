@@ -9,9 +9,6 @@ Actions:    0 -> noop
             7 -> aim1
 """
 
-# TODO: write suite of unittests
-# TODO: verify firing not allowed when blocked
-
 from itertools import product
 import functools
 
@@ -30,6 +27,8 @@ RANGE = 4 # 10 #4
 AMMO  = 5
 STEP = -0.01 # reward for making a step
 
+GRAPH_REFRESH_TIME = 0.1 # visualization speed
+
 ## --------------------------------------------------------------------------------------------------------------------------
 def env(terrain="flat_5x5", max_cycles=100, max_distance=RANGE):
     '''
@@ -43,6 +42,7 @@ def env(terrain="flat_5x5", max_cycles=100, max_distance=RANGE):
     env = wrappers.CaptureStdoutWrapper(env)
     env = wrappers.AssertOutOfBoundsWrapper(env)
     env = wrappers.OrderEnforcingWrapper(env)
+    env.render = env.env.env.env.render # allows direct access to render method of original environment
     return env
 ## --------------------------------------------------------------------------------------------------------------------------
 
@@ -51,13 +51,12 @@ def distance(agent, other):
     x2, y2 = other.x, other.y
     return np.sqrt((x2-x1)**2  + (y2-y1)**2)
 
-# class for the state for the whole system 
 class State:
     def __init__(self, agents, obstacles) -> None:
         self.agents = agents
         self.obstacles = obstacles
     
-    @property # def function without metting the parenthesis in it 
+    @property
     def occupied(self):
         "returns list of occupied squares"
         squares = self.obstacles[:]
@@ -65,14 +64,22 @@ class State:
             squares.append((agent.x, agent.y))
         return squares
     
-    def get_observation(self, agent): # TODO: improve (include ID)
+    def get_observation(self, agent):
+        """ 
+        Computes observation for agent. An observation consists of 
+        * own state: x, y, alive, ammo, aim
+        * state of team mates: dx, dy, alive, ammo, aim
+            where dx, dy is the relative position wrt own position
+        * state of adversaries: dx, dy, alive, ammo, aim
+        * (absolute) position of landmarks
+        """
         # TODO: add visibility information?
         if isinstance(agent, str):
             agent = self.agents[agent]
         observation = { 'self': agent.to_array(),
-                        'team': [other.to_array() for other in self.agents.values()
+                        'team': [other.to_array(agent) for other in self.agents.values()
                                     if other.team==agent.team and other != agent],
-                        'others': [other.to_array() for other in self.agents.values()
+                        'others': [other.to_array(agent) for other in self.agents.values()
                                     if other.team!=agent.team],
                         'obstacles': self.obstacles
                     }
@@ -101,7 +108,7 @@ class State:
         return arr
     
     @staticmethod
-    def from_array(arr): # what is this  ? 
+    def from_array(arr):
         obstacle_arr = arr[:-20].reshape(-1, 2)
         obstacles = [tuple(row) for row in obstacle_arr]
 
@@ -158,9 +165,18 @@ class Agent:
     def set_position(self, x, y):
         self.x, self.y = x, y
     
-    def to_array(self):
+    def to_array(self, other=None):
+        """Computes Agent representation as numpy array.
+        If `other` is other agent, gives distances x, y 
+        relative to this agent. 
+        """
+        assert other is None or isinstance(other, Agent), f"other should be None or Agent but is {type(agent)}"
+        x0, y0 = 0, 0
+        if other is not None:
+            x0, y0 = other.x, other.y
+
         aim = self.aim.id if self.aim != -1 else -1
-        return np.array([self.x, self.y, int(self.alive), self.ammo, aim])
+        return np.array([self.x-x0, self.y-y0, int(self.alive), self.ammo, aim])
     
     @staticmethod
     def from_array(id, team, arr):
@@ -449,8 +465,9 @@ class Environment(AECEnv):
                                                             [self.size-agent1.x-0.5, self.size-agent2.x-0.5],
                                                             alpha=0., color=agent1.team, linewidth=0.5)
             self.ax.add_line(self.lines[(agent1.name, agent2.name)])
+        self.patches['text'] = self.ax.text(0.05, self.size+0.25, '')
     
-    def render(self, mode='human'):
+    def render(self, mode='human', info=''):
         if not hasattr(self, 'ax'):
             self._make_graph()
         for agent in self.agents_.values():
@@ -466,8 +483,11 @@ class Environment(AECEnv):
             else:
                 self.lines[(agent1.name, agent2.name)].set_alpha(0.)
 
+        self.patches['text'].set_text(info)
+
         plt.show()
-        plt.pause(1.0)
+        
+        plt.pause(GRAPH_REFRESH_TIME)
 
 ## --utilities -------------------------------------------------
 
@@ -481,7 +501,7 @@ def write_terrain(name, terrain):
     """
     size = terrain['size']
     s = render_terrain(terrain)
-    with open(f'/terrains/{name}_{size}x{size}.ter', 'w') as f:
+    with open(f'terrains/{name}_{size}x{size}.ter', 'w') as f:
         f.write(s)
 
 def load_terrain(name):

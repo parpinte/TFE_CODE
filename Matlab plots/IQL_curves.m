@@ -30,10 +30,10 @@ semilogy(curve1_B(:,1),curve1_B_smooth, 'LineWidth',width)
 
 grid on 
 legend('IQL-loss','RIAL-2m-loss','IQL-loss-lisse','RIAL-2m-loss-lisse', 'Interpreter','latex')
-xlabel('épisodes','Interpreter','latex')
-ylabel('loss','Interpreter','latex')
-title('Le loss : IQL vs RIAL-2m','Interpreter','latex')
-% print('IQL loss','-dpng')
+a = xlabel('épisodes','Interpreter','latex'); a.FontSize = 15; 
+b = ylabel('loss','Interpreter','latex'); b.FontSize = 15; 
+title('Le loss : IQL vs RIAL-2m','Interpreter','latex','FontSize',15)
+print('IQL loss','-dpng')
 
 % n cycles
 figure('Name','IQL n cycles and reward ')
@@ -51,9 +51,9 @@ plot(curve2_B(:,1),curve2_B_smooth, 'LineWidth',width)
 
 grid on 
 legend('IQL-n-cycles','RIAL-2m-ncycles','IQL-n-cycles-lisse','RIAL-2m-ncycles-lisse', 'Interpreter','latex')
-xlabel('épisodes','Interpreter','latex')
-ylabel('n-cycles','Interpreter','latex')
-title('fig-a : Le nombre de cycles : IQL vs RIAL-2m ','Interpreter','latex')
+a = xlabel('épisodes','Interpreter','latex'); a.FontSize = 15; 
+b = ylabel('n-cycles','Interpreter','latex'); b.FontSize = 15; 
+title({'fig-a : Le nombre de cycles :','IQL vs RIAL-2m '},'Interpreter','latex','FontSize',15)
 
 
 % reward 
@@ -74,11 +74,33 @@ grid on
 legend('IQL-récompense','RIAL-2m-récompense','IQL-récompense-lisse','RIAL-2m-récompense-lisse', 'Interpreter','latex','Location','southeast')
 xlabel('épisodes','Interpreter','latex')
 ylabel('récompense','Interpreter','latex')
-title('fig-b : La recompense : IQL vs RIAL-2m ','Interpreter','latex')
+title({'fig-b : La recompense :',' IQL vs RIAL-2m '},'Interpreter','latex')
 
 print('IQL vs RIAL-2m ncycles and reward','-dpng')
 
 
 
 
-%%
+%% VDN loss plot 
+clear; close all; clc; 
+data = csvread('VDN_partial_observation_loss.csv',2,1);
+
+
+alpha = 0.98;
+width = 2.5;
+smooth_data = smooth(data(:,2), alpha); 
+window = 200; 
+
+
+figure("Name",'VDN partial loss evolution')
+hold on 
+semilogy(data(:,1), data(:,2));
+plot(data(:,1), smooth_data, 'LineWidth',width)
+ylim([0, 0.05])
+grid on 
+grid minor
+legend('VDN loss','VDN loss lisse', 'Interpreter','latex')
+xlabel('épisodes','Interpreter','latex')
+ylabel('loss','Interpreter','latex')
+title({'Les pertes en VDN dans un environnement','totalement observable'},'Interpreter','latex')
+print('VDN partial loss','-dpng')

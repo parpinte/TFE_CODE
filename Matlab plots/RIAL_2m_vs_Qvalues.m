@@ -23,9 +23,9 @@ semilogy(rial_2m_loss(:,1),rial_2m_loss_smooth, 'LineWidth',width)
 semilogy(rial_qvalues_loss(:,1),rial_qvalues_loss_smooth, 'LineWidth',width)
 grid on 
 legend('RIAL-2m-loss','RIAL-Qvalues-loss','RIAL-2m-loss-lisse','RIAL-Qvalues-loss-lisse', 'Interpreter','latex')
-xlabel('épisodes','Interpreter','latex')
-ylabel('loss','Interpreter','latex')
-title('Le loss : RIAL-2m VS RIAL-Qvalues','Interpreter','latex')
+a = xlabel('épisodes','Interpreter','latex'); a.FontSize = 12;
+a = ylabel('loss','Interpreter','latex'); b.FrontSize = 12;
+title('Le loss : RIAL-2m VS RIAL-Qvalues','Interpreter','latex','FontSize',15)
 print('RIAL-2m VS RIAL-Qvalues loss','-dpng')
 % n cycles
 figure('Name','RIAL_2m vs RIAL Qvalues n_cycles')
@@ -39,9 +39,9 @@ plot(rial_2m_n_cycles(:,1),rial_2m_n_cycles_smooth, 'LineWidth',width)
 plot(rial_qvalues_n_cycles(:,1),rial_qvalues_n_cycles_smooth, 'LineWidth',width)
 grid on 
 legend('RIAL-2m-n-cycles','RIAL-Qvalues-n-cycles','RIAL-2m-n-cycles-lisse','RIAL-Qvalues-n-cycles-lisse', 'Interpreter','latex')
-xlabel('épisodes','Interpreter','latex')
-ylabel('Nombre de cycles','Interpreter','latex')
-title('Nombre de cycles : RIAL-2m VS RIAL-Qvalues','Interpreter','latex')
+a = xlabel('épisodes','Interpreter','latex'); a.FontSize = 12;
+b = ylabel('Nombre de cycles','Interpreter','latex'); b.FontSize = 12; 
+title('Nombre de cycles : RIAL-2m VS RIAL-Qvalues','Interpreter','latex','FontSize',15)
 print('RIAL-2m VS RIAL-Qvalues n_cycles','-dpng')
 %reward 
 figure('Name','RIAL_2m vs RIAL Qvalues reward')
@@ -57,9 +57,9 @@ plot(rial_2m_reward(:,1),rial_2m_reward_smooth, 'LineWidth',width)
 plot(rial_qvalues_reward(:,1),rial_qvalues_reward_smooth, 'LineWidth',width)
 grid on 
 legend('RIAL-2m-récompense','RIAL-Qvalues-récompense','RIAL-2m-récompense-lisse','RIAL-Qvalues-récompense-lisse', 'Interpreter','latex','Location','southeast')
-xlabel('épisodes','Interpreter','latex')
-ylabel('La Récompense','Interpreter','latex')
-title('La Recompense : RIAL-2m VS RIAL-Qvalues','Interpreter','latex')
+a = xlabel('épisodes','Interpreter','latex'); a.FontSize = 12; 
+b = ylabel('La Récompense','Interpreter','latex'); b.FontSize = 12; 
+title('La Recompense : RIAL-2m VS RIAL-Qvalues','Interpreter','latex','FontSize',15)
 print('RIAL-2m VS RIAL-Qvalues récompense','-dpng')
 
 

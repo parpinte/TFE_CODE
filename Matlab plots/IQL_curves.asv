@@ -2,8 +2,8 @@
 
 clear; close all; clc; 
 
-alpha = 0.98
-width = 2.2
+alpha = 0.98;
+width = 2.5;
 
 curve1_A = csvread("IQL_loss.csv",2,1);
 curve2_A = csvread("IQL_n_cycle_.csv",2,1);
@@ -53,7 +53,7 @@ grid on
 legend('IQL-n-cycles','RIAL-2m-ncycles','IQL-n-cycles-lisse','RIAL-2m-ncycles-lisse', 'Interpreter','latex')
 xlabel('épisodes','Interpreter','latex')
 ylabel('n-cycles','Interpreter','latex')
-title('fig-a : Le nombre de cycles : IQL ','Interpreter','latex')
+title('fig-a : Le nombre de cycles : IQL vs RIAL-2m ','Interpreter','latex')
 
 
 % reward 
@@ -64,19 +64,40 @@ curve3_B_smooth = smooth(curve3_B(:,2), alpha);
 
 hold on 
 plot(curve3_A(:,1),curve3_A(:,2))
-plot(curve3_B(:,1),curve3_A(:,2))
+plot(curve3_B(:,1),curve3_B(:,2))
 
 
 plot(curve3_A(:,1),curve3_A_smooth, 'LineWidth',width)
+plot(curve3_B(:,1),curve3_B_smooth, 'LineWidth',width)
 
 grid on 
-legend('IQL-récompense','IQL-récompense-lisse', 'Interpreter','latex','Location','southeast')
+legend('IQL-récompense','RIAL-2m-récompense','IQL-récompense-lisse','RIAL-2m-récompense-lisse', 'Interpreter','latex','Location','southeast')
 xlabel('épisodes','Interpreter','latex')
 ylabel('récompense','Interpreter','latex')
-title('fig-b : La recompense : IQL ','Interpreter','latex')
-% print('IQL reward and ncycles','-dpng')
+title('fig-b : La recompense : IQL vs RIAL-2m ','Interpreter','latex')
+
+print('IQL vs RIAL-2m ncycles and reward','-dpng')
 
 
 
 
-%%
+%% VDN loss plot 
+clear; close all; clc; 
+data = csvread('VDN_partial_observation_loss.csv',2,1);
+
+
+alpha = 0.98;
+width = 2.5;
+smooth_data = smooth(data(:,2), alpha); 
+window = 200; 
+
+
+figure("Name",'VDN partial loss evolution')
+hold on 
+semilogy(data(:,1), data(:,2));
+plot(data(:,1), smooth_data, 'LineWidth',width)
+ylim([0, 0.1])
+legend('VDN loss','VDN loss lisse', 'Interpreter','latex')
+xlabel('épisodes','Interpreter','latex')
+ylabel('loss','Interpreter','latex')
+title('Les pertes en VDN dans un environnement')

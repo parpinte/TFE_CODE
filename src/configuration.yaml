@@ -1,11 +1,11 @@
 # parameters  
 
 # environment 
-TERRAIN : 'central_7x7_2v2_obsdiff' # 'central_7x7_2v2' #'central01_10x10'
+TERRAIN : 'blue_down' # 'central_7x7_2v2' #'central01_10x10'
 MAX_CYCLES : 100
 
 # simulation 
-N_EPISODES : 300000
+N_EPISODES : 320000
 EPSILON_START : 1
 UPDATE_TIME : 20 # update each 300 episodes 
 PRINT_TIME : 2000
@@ -21,10 +21,10 @@ C : 0.1
 
 # BUFFER PARAMETRS
 CAPACITY_AGENT : 110
-CAPACITY : 5000
+CAPACITY : 8000
 BATCH_SIZE : 100
 
 # NETWORKX
-LEARNING_RATE : 0.0001
+LEARNING_RATE : 0.001
 GAMMA : 0.9
 DROPOUT : 0

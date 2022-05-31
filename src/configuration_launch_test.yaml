@@ -2,7 +2,7 @@
 # parameters  
 
 # environment 
-TERRAIN : 'blue_up' # 'central_7x7_2v2' #'central01_10x10'
+TERRAIN : 'blue_down' # 'central_7x7_2v2' #'central01_10x10'
 MAX_CYCLES : 100
 
 # simulation 
@@ -12,8 +12,8 @@ UPDATE_TIME : 20 # update each 300 episodes
 PRINT_TIME : 2000
 INPUT_MESSAGES_BLUE : 1
 INPUT_MESSAGES_RED : 1
-OUTPUT_MESSAGES_BLUE : 10
-OUTPUT_MESSAGES_RED : 2
+OUTPUT_MESSAGES_BLUE : 5
+OUTPUT_MESSAGES_RED : 1
 HIDDEN_LAYER : 132
 DEVICE_BLUE : 'cpu'
 DEVICE_RED : 'cpu'

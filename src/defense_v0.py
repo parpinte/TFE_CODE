@@ -486,6 +486,7 @@ class Environment(AECEnv):
         self.patches['text'].set_text(info)
 
         plt.show()
+        # plt.savefig('figtest')
         plt.pause(GRAPH_REFRESH_TIME)
 
 ## --utilities -------------------------------------------------

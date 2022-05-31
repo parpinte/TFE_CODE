@@ -242,7 +242,7 @@ class Runner():
                 red_team.append(agent)
         return blue_team, red_team
 
-    def demo(self,N_times, blue_epsilon, red_epsilon, render):
+    def demo(self,N_times, blue_epsilon, red_epsilon, render, test_name):
         
         for agent in self.env.agents:
             if 'blue' in agent:
@@ -258,6 +258,8 @@ class Runner():
         
         for _ in range(N_times): 
             self.env.reset()
+            #self.env.render()
+            #time.sleep(20)
             self.msg = {'blue' : 0, 'red': 0}
             message = 0
             n_cycles = []
@@ -266,6 +268,7 @@ class Runner():
             cycle = 0
             r_blue = 0
             r_red = 0
+            cnt = 0
             for agent in self.env.agent_iter():
 
                 last_agent = self.env.agents[0]
@@ -288,7 +291,10 @@ class Runner():
 
                 if render:
                     self.env.render()
-            
+                    if agent == last_agent:
+                        plt.savefig('recordings/'+test_name+ '_'+ str(cnt) +'.png')
+                        cnt +=1
+                    
                 if agent == last_agent:
                     cycle += 1
 
@@ -336,25 +342,34 @@ if __name__ == '__main__':
     configuration_file = r'configuration_launch_test.yaml'
     runner = Runner(configuration_file)
     # load the neural network parameters 
-    file_path_blue = os.path.abspath('nets/RIAL/RIAL_10m_blue_up.pk')
+    file_path_blue = os.path.abspath('nets/RIAL/ VDN_Qvalues_com.pk')
     runner.blue_net.load_state_dict(torch.load(file_path_blue))
-    file_path_red = os.path.abspath('nets/RIAL/ RIAL_2m_blue_down.pk')
-    runner.red_net.load_state_dict(torch.load(file_path_red))
+    #file_path_red = os.path.abspath('nets/RIAL/ VDN_test_blue_down.pk')
+    #runner.red_net.load_state_dict(torch.load(file_path_red))
     
     N_times = 1
+    test_name = 'VDN_observable'
+
     blue_epsilon = 0
-    red_epsilon = 0
+    red_epsilon = 1
     render = True
-    messages_blue, messages_red, cumulative_reward_blue,cumulative_reward_red, n_cycles = runner.demo(N_times, blue_epsilon, red_epsilon, render)
-    
-    """
+    messages_blue, messages_red, cumulative_reward_blue,cumulative_reward_red, n_cycles = runner.demo(N_times, blue_epsilon, red_epsilon, render, test_name)
+    print(cumulative_reward_blue)
+    print(cumulative_reward_red)
+    a  = 2
+ 
     a,b = make_order(messages_blue)
     # rearrenge the values to draw the messages 
     var_msg = np.array([st.pvariance(a[idx]) for idx in range(len(a))])
+
     cumulative_reward_blue = np.array(cumulative_reward_blue)
+    cumulative_reward_red = np.array(cumulative_reward_red)
+
     win_blue = [cumulative_reward_blue[idx] > 0 for idx in range(len(cumulative_reward_blue))]
-    fraction = sum(win_blue) / len(win_blue)
-    print(fraction)
-    n_cycles = np.array(n_cycles)
-    scipy.io.savemat('RIAL-10m.mat', {'var_msg': var_msg,'cumulative_reward_blue' : cumulative_reward_blue ,'n_cycles' :n_cycles})
-    """
+    win_red = [cumulative_reward_red[idx] > 0 for idx in range(len(cumulative_reward_red))]
+
+    fraction_blue = sum(win_blue) / len(win_blue)
+    fraction_red = sum(win_red) / len(win_red)
+    print(fraction_blue, fraction_red)
+    
+    #scipy.io.savemat('matplot/RIAL_Qvaluest1.mat', {'var_msg': var_msg,'cumulative_reward_blue' : cumulative_reward_blue})

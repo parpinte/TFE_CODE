@@ -263,14 +263,19 @@ class Runner():
                 self.agents[agent].set_epsilon(self.N_EPISODES, episode)
                 # take the observation / the action and 
                 m[agent].append(self.msg[training_team])
-                action, message = self.agents[agent].selector(observation = obs, done = done, msg = self.msg[training_team])
+                action, message = self.agents[agent].selector(observation = obs, done = done, msg = self.msg[training_team]) #msg = )
+                
                 a[agent].append(action)
-                self.msg[training_team] = message
+                if self.missing_Agent(training_team):
+                    self.msg[training_team] = 0
+                else: 
+                    self.msg[training_team] = action
+                
                 cum_reward += re[agent][-1]
             else: 
                 self.agents[agent].epsilon = 1
                 self.msg[self.other_team(training_team)] = 0
-                action, message = self.agents[agent].selector(observation = obs, done = done, msg = self.msg[self.other_team(training_team)])
+                action, message = self.agents[agent].selector(observation = obs, done = done, msg = 0 ) #self.msg[self.other_team(training_team)])
                 message = 0 # so there is no communication done
                 # fixe the opponent 
                 # action = 0
@@ -346,32 +351,11 @@ class Runner():
         for agent in team:
             self.agents[agent].sync()
 
-    def train(self, training_team):
-        writer = SummaryWriter('src/runs/Sim1m_3000ep_Qvals')
-        for episode in range(self.N_EPISODES):
-            r, n_cycles = self.generate(training_team, episode)
-            self.mix_buffer(training_team)
-            while self.BATCH_SIZE > self.Big_buffer.__len__():
-                self.generate(training_team, episode)
-                self.mix_buffer(training_team)
-
-            batch = self.Big_buffer.sample(self.BATCH_SIZE)
-            loss = self.learn(training_team, batch)
-            if episode % (self.UPDATE_TIME) == 0:
-                    self.sync(training_team)
-                    
-            if (episode % self.PRINT_TIME == 0) | (episode == self.N_EPISODES - 1):
-                print(f'episode = {episode} | average reward {r} | loss = {loss} | epsilon = {self.agents[self.team_to_train(training_team)[0]].epsilon} | n_cycles = {n_cycles}')
-                self.save(episode)
-
-            writer.add_scalar('reward', r, episode)
-            writer.add_scalar('loss', loss, episode)
-            writer.add_scalar('epsilon',self.agents[self.team_to_train(training_team)[0]].epsilon, episode)
-            writer.add_scalar('n_cycles', n_cycles, episode)
+   
             
 
     def save(self, episode):
-        filename = f"VDN_test_blue_down.pk"
+        filename = f"VDN_True_Action_com.pk"
         torch.save(self.net.state_dict(), './nets/RIAL/ '+ filename)
 
     def learn(self, training_team, batch):
@@ -429,6 +413,16 @@ class Runner():
         tensor[idx] = r
 
         return tensor
+    def missing_Agent(self, training_team):
+        agents = self.env.agents
+        a = []
+        result = False
+        for agent in agents:
+            if training_team in agent:
+                a.append(agent)
+        if len(a) < 2:
+            result = True
+        return result
 
     def reset_epsilon(self, training_team):
         for agent in self.NAME_AGENTS:
@@ -519,7 +513,7 @@ class Runner():
 
     def train_fromVDN(self, training_team):
         # all what we use is from the big buffer 
-        writer = SummaryWriter('src/runs/VDN_test')
+        writer = SummaryWriter('src/runs/VDN_True_Action_Com')
         for episode in range(self.N_EPISODES):
             r, n_cycles = self.generate(training_team, episode)
             self.MixerVDN(training_team)
